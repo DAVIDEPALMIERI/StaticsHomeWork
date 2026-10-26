@@ -145,12 +145,12 @@ function render(filter = '') {
       <div class="tags">${h.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       <span class="open">Open homework ${h.n} →</span>
     </a>`).join('');
-  if (!f) html = `
+  if (!f) html += `
     <div class="card soon" aria-hidden="true">
       <span class="no">${pad(next)}</span>
       <h3>Next homework</h3>
       <p>Coming next week.</p>
-    </div>` + html;
+    </div>`;
   document.getElementById('grid').innerHTML = html || '<p class="empty">No homework matches this filter.</p>';
 }
 document.getElementById('q').addEventListener('input', e => render(e.target.value));
