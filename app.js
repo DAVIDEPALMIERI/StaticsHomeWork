@@ -513,7 +513,7 @@ function drawDists() {
       const A = axes(ctx, box, xd, [0, ymax * 1.1 || 1], { noY: true, nx: 3, yticks: [] });
       clip(ctx, box); drawBars(ctx, A, H.bins, q.col); drawTheoStep(ctx, A, H.bins); ctx.restore();
       const mo = D.mom[i];
-      $(`#dcap${qi}_${ni}`).innerHTML = `x̄ ${fmt(mo.mean * c)} · s² ${fmt(mo.var * c * c)}<br><span>σ²·(theory) ${fmt(M.v * n * c * c)}</span>`;
+      $(`#dcap${qi}_${ni}`).innerHTML = `x̄ ${fmt(mo.mean * c)} · s² ${fmt(mo.var * c * c)}<br><span>Var (theory) ${fmt(M.v * n * c * c)}</span>`;
     });
   });
 }
