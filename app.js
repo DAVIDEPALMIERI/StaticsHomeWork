@@ -1,6 +1,6 @@
 'use strict';
 /* =====================================================================
-   Breach Ledger — HW3 Statistics (LLN & CLT on a penetration process)
+   Breach Ledger — HW4 Statistics (LLN & CLT on a penetration process)
    Vanilla JS + Canvas 2D. No chart libraries.
    ===================================================================== */
 
