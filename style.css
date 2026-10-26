@@ -26,6 +26,8 @@ a{color:var(--blue)}
   background:var(--card);display:flex;flex-direction:column;gap:26px;
 }
 .brand{display:flex;gap:12px;align-items:center}
+.back{font-family:var(--mono);font-size:12px;color:var(--soft);text-decoration:none;margin-bottom:-10px}
+.back:hover{color:var(--red)}
 .brand b{font-family:var(--serif);font-size:21px;display:block;line-height:1.1}
 .brand small{font-family:var(--mono);font-size:11px;color:var(--soft)}
 .stamp{
