@@ -259,7 +259,10 @@
     <div class="figure"><div class="fig-title">CDF: empirical vs Φ (Kolmogorov distance)</div><canvas id="cvCltCdf" class="h300"></canvas></div>
   </div>
   <div class="two">
-    <div class="figure"><div class="fig-title">Distance to normality vs n</div><canvas id="cvKs" class="h280"></canvas></div>
+    <div class="figure"><div class="fig-title">Distance to normality vs n</div><canvas id="cvKs" class="h280"></canvas>
+      <p class="cap">Berry–Esseen bounds the <em>true</em> distance \(\sup_x|F_n(x)-\Phi(x)|\). The plotted D is estimated from only
+      m simulated attackers, so it also contains Monte-Carlo sampling error of order \(0.83/\sqrt m\) (dotted line):
+      for large n the points flatten on that noise floor instead of following the bound. Increasing m lowers the floor.</p></div>
     <div class="figure"><div class="fig-title">Moments of Zₙ</div><table class="ledger" id="cltTable"></table></div>
   </div>
 </section>
