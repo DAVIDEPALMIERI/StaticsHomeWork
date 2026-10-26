@@ -222,8 +222,10 @@ function axes(ctx, box, xd, yd, o = {}) {
 function clip(ctx, box) { ctx.save(); ctx.beginPath(); ctx.rect(box.x, box.y, box.w, box.h); ctx.clip(); }
 function legend(ctx, x, y, items) {
   ctx.save();
-  ctx.font = '11px "IBM Plex Mono", monospace'; ctx.textBaseline = 'middle';
+  const cw = ctx.canvas.width / (window.devicePixelRatio || 1);
+  ctx.font = (cw < 480 ? '10px' : '11px') + ' "IBM Plex Mono", monospace'; ctx.textBaseline = 'middle';
   const wmax = Math.max(...items.map(it => ctx.measureText(it.label).width)) + 32;
+  x = Math.max(8, Math.min(x, cw - wmax - 6));
   ctx.fillStyle = 'rgba(251,248,241,.92)'; ctx.strokeStyle = COL.rule;
   ctx.fillRect(x - 6, y - 10, wmax + 8, items.length * 16 + 4);
   ctx.strokeRect(x - 6.5, y - 10.5, wmax + 8, items.length * 16 + 4);
@@ -309,7 +311,8 @@ function drawLattice() {
 const MX = { rows: 0, cols: 60, g: null, M: null, k: 0 };
 function runMatrix() {
   const M = model(), rng = rngFor('matrix');
-  MX.rows = Math.min(28, S.m); MX.M = M;
+  const narrow = window.innerWidth < 640;
+  MX.rows = Math.min(narrow ? 20 : 28, S.m); MX.cols = narrow ? 30 : 60; MX.M = M;
   MX.g = new Int8Array(MX.rows * MX.cols);
   for (let i = 0; i < MX.g.length; i++) MX.g[i] = rng() < M.p ? M.hi : M.lo;
   animate('matrix', 1500, f => drawMatrix(Math.max(1, Math.ceil(f * MX.cols))));
@@ -319,7 +322,7 @@ function drawMatrix(k = MX.k || MX.cols) {
   MX.k = k;
   const { ctx, w, h } = cv('cvMatrix');
   const { rows, cols, g, M } = MX;
-  const L = 40, R = Math.max(110, Math.min(190, w * 0.25)), T = 22, B = 58;
+  const L = 34, R = w < 500 ? 92 : Math.max(110, Math.min(190, w * 0.25)), T = 22, B = 58;
   const gw = w - L - R - 10, gh = h - T - B, cw = gw / cols, ch = gh / rows;
   ctx.font = '10px "IBM Plex Mono", monospace';
   ctx.fillStyle = COL.soft; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
@@ -363,7 +366,7 @@ function drawMatrix(k = MX.k || MX.cols) {
   ctx.setLineDash([4, 3]); ctx.strokeStyle = COL.ink; ctx.beginPath();
   ctx.moveTo(L, base - H * M.p + 0.5); ctx.lineTo(L + gw, base - H * M.p + 0.5); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle = COL.soft; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-  ctx.fillText(`breach fraction per system (dashed = ${M.type === 'rad' ? '1/2' : 'p'})`, L, h - 2);
+  ctx.fillText(w < 500 ? `breach fraction (dashed = ${M.type === 'rad' ? '1/2' : 'p'})` : `breach fraction per system (dashed = ${M.type === 'rad' ? '1/2' : 'p'})`, L, h - 2);
   // stats
   const rates = sums.map(s => (M.type === 'rad' ? (s + k) / 2 : s) / k);
   const mean = rates.reduce((a, b) => a + b, 0) / rows;
@@ -413,11 +416,11 @@ function drawPathPanel(qi, upTo) {
   const P = S.paths; if (!P) return;
   const q = Q[qi], M = P.M, { ctx, w, h } = cv('cvPath' + qi);
   upTo = Math.min(upTo, P.K);
-  const mw = Math.max(70, Math.min(150, w * 0.2));
-  const box = { x: 56, y: 8, w: w - 56 - mw - 8, h: h - 8 - 34 };
+  const mw = w < 500 ? 56 : Math.max(70, Math.min(150, w * 0.2)), L = w < 500 ? 40 : 56;
+  const box = { x: L, y: 8, w: w - L - mw - 8, h: h - 8 - 34 };
   const mb = { x: box.x + box.w + 6, y: box.y, w: mw - 4, h: box.h };
   const vals = P.vals[qi], K = P.K, idx = P.idx, yr = P.range[qi];
-  const A = axes(ctx, box, [0, P.n], yr, { xlabel: 'k = systems attacked', nx: 6 });
+  const A = axes(ctx, box, [0, P.n], yr, { xlabel: 'k = systems attacked', nx: w < 500 ? 3 : 6 });
   const env = k => { const sk = Math.sqrt(k); return qi === 0 ? [M.mu * k, 2 * M.sd * sk] : qi === 1 ? [M.mu, 2 * M.sd / sk] : [M.mu * sk, 2 * M.sd]; };
   clip(ctx, box);
   ctx.fillStyle = 'rgba(22,32,42,.08)'; ctx.beginPath();
@@ -510,7 +513,7 @@ function drawDists() {
       const box = { x: 6, y: 6, w: w - 12, h: h - 24 };
       let ymax = 0; for (const b of H.bins) ymax = Math.max(ymax, b.d, b.t);
       const xd = sh ? [lo, hi] : [H.x0, H.x1];
-      const A = axes(ctx, box, xd, [0, ymax * 1.1 || 1], { noY: true, nx: 3, yticks: [] });
+      const A = axes(ctx, box, xd, [0, ymax * 1.1 || 1], { noY: true, nx: w < 170 ? 2 : 3, yticks: [] });
       clip(ctx, box); drawBars(ctx, A, H.bins, q.col); drawTheoStep(ctx, A, H.bins); ctx.restore();
       const mo = D.mom[i];
       $(`#dcap${qi}_${ni}`).innerHTML = `x̄ ${fmt(mo.mean * c)} · s² ${fmt(mo.var * c * c)}<br><span>Var (theory) ${fmt(M.v * n * c * c)}</span>`;
@@ -644,7 +647,7 @@ function drawCLT() {
     const box = { x: 40, y: 10, w: w - 40 - 10, h: h - 10 - 40 };
     const H = latticeHist(Sarr, -4.2, 4.2, n, M, c, d, 60);
     let ymax = 0.42; for (const b of H.bins) ymax = Math.max(ymax, b.d, b.t);
-    const A = axes(ctx, box, [-4.2, 4.2], [0, ymax * 1.08], { xlabel: 'z', nx: 8, ny: 4 });
+    const A = axes(ctx, box, [-4.2, 4.2], [0, ymax * 1.08], { xlabel: 'z', nx: w < 500 ? 4 : 8, ny: 4 });
     clip(ctx, box); drawBars(ctx, A, H.bins, COL.norm); drawTheoStep(ctx, A, H.bins, COL.ink, 1);
     curve(ctx, A, phi, -4.2, 4.2, 200, COL.total, 2.2); ctx.restore();
     legend(ctx, box.x + 10, box.y + 14, [
@@ -657,7 +660,7 @@ function drawCLT() {
   {
     const { ctx, w, h } = cv('cvCltCdf');
     const box = { x: 40, y: 10, w: w - 40 - 10, h: h - 10 - 40 };
-    const A = axes(ctx, box, [-4.2, 4.2], [0, 1], { xlabel: 'z', nx: 8, yticks: [0, 0.25, 0.5, 0.75, 1] });
+    const A = axes(ctx, box, [-4.2, 4.2], [0, 1], { xlabel: 'z', nx: w < 500 ? 4 : 8, yticks: [0, 0.25, 0.5, 0.75, 1] });
     clip(ctx, box);
     curve(ctx, A, Phi, -4.2, 4.2, 200, COL.total, 2.2);
     const z = K.z, m = z.length;
@@ -799,7 +802,7 @@ function bind() {
   let rt;
   window.addEventListener('resize', () => {
     clearTimeout(rt);
-    rt = setTimeout(() => { drawLattice(); drawMatrix(); if (S.paths) drawPaths(); drawDists(); drawVariance(); drawLLN(); drawCLT(); }, 150);
+    rt = setTimeout(() => { drawLattice(); if ((window.innerWidth < 640) !== (MX.cols === 30)) runMatrix(); else drawMatrix(); if (S.paths) drawPaths(); drawDists(); drawVariance(); drawLLN(); drawCLT(); }, 150);
   });
   // active section in the side index
   const links = $$('#toc a');
