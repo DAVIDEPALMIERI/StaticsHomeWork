@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Statistics Homeworks · Davide Palmieri</title>
+<meta name="description" content="Weekly Statistics homeworks — MSc Cybersecurity, Sapienza Università di Roma.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4f0e6; --card:#fbf8f1; --ink:#16202a; --soft:#5b6670; --rule:#d6ccb6;
+  --red:#c0392b; --blue:#1d4f91; --green:#2e7d57;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --serif:"Fraunces",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--sans);
+  background-image:
+    linear-gradient(rgba(120,100,60,.07) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(120,100,60,.07) 1px,transparent 1px);
+  background-size:26px 26px;background-attachment:fixed;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:44px 24px 70px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;
+  border-bottom:2px solid var(--ink);padding-bottom:22px}
+.kicker{font:500 12px var(--mono);letter-spacing:.14em;color:var(--red);margin:0}
+h1{font-family:var(--serif);font-weight:800;font-size:clamp(40px,6.5vw,78px);line-height:.95;margin:10px 0 12px;letter-spacing:-.025em}
+.sub{max-width:58ch;margin:0;color:#2b3640;font-size:17px}
+.id{font:12px/1.8 var(--mono);color:var(--soft);background:var(--card);border:1.5px solid var(--ink);
+  padding:12px 16px;box-shadow:5px 5px 0 var(--red);min-width:240px}
+.id b{color:var(--ink);font-weight:600}
+
+/* week strip */
+.strip{display:flex;gap:6px;flex-wrap:wrap;margin:26px 0 8px;align-items:center}
+.strip span.lbl{font:11px var(--mono);letter-spacing:.12em;color:var(--soft);margin-right:6px}
+.wk{width:34px;height:34px;display:grid;place-items:center;font:600 12px var(--mono);
+  border:1.5px solid var(--rule);color:var(--rule);background:transparent;text-decoration:none}
+.wk.done{border-color:var(--ink);background:var(--ink);color:var(--card)}
+.wk.done:hover{background:var(--red);border-color:var(--red)}
+.wk.next{border-style:dashed;border-color:var(--red);color:var(--red)}
+
+/* controls */
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:22px 0 14px}
+.bar h2{font-family:var(--serif);font-weight:700;font-size:28px;margin:0}
+.search{font:13px var(--mono);padding:8px 10px;border:1.5px solid var(--ink);background:var(--card);min-width:240px}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.card{position:relative;display:flex;flex-direction:column;background:var(--card);border:1.5px solid var(--ink);
+  padding:18px 18px 16px;text-decoration:none;color:inherit;transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translate(-3px,-3px);box-shadow:6px 6px 0 var(--ink)}
+.card .no{font-family:var(--serif);font-weight:800;font-size:58px;line-height:.9;color:var(--red);letter-spacing:-.03em}
+.card .date{position:absolute;top:16px;right:16px;font:11px var(--mono);color:var(--soft)}
+.card h3{font-family:var(--serif);font-weight:600;font-size:21px;line-height:1.2;margin:12px 0 6px}
+.card p{margin:0 0 14px;font-size:14px;color:#3a4550;flex:1}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tag{font:11px var(--mono);border:1px solid var(--rule);padding:2px 7px;color:var(--soft)}
+.open{font:600 13px var(--mono);color:var(--ink);border-top:1px dashed var(--rule);padding-top:10px}
+.card:hover .open{color:var(--red)}
+.card.soon{border-style:dashed;border-color:var(--rule);pointer-events:none}
+.card.soon .no{color:var(--rule)}
+.card.soon h3,.card.soon p{color:var(--soft)}
+.empty{font:13px var(--mono);color:var(--soft);padding:20px 0}
+footer{margin-top:60px;border-top:2px solid var(--ink);padding-top:12px;font:11.5px var(--mono);color:var(--soft)}
+@media (max-width:640px){.wrap{padding:28px 16px 50px}.search{min-width:0;width:100%}}
+@media (prefers-reduced-motion:reduce){.card{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="kicker">STATISTICS · A.Y. 2026/27</p>
+      <h1>Homework Ledger</h1>
+      <p class="sub">One interactive homework per week: simulations, proofs and their reading in a cybersecurity context.
+      Pick an entry to open it.</p>
+    </div>
+    <div class="id">
+      Student: <b>Davide Palmieri</b><br>
+      Matricola: <b>2058889</b><br>
+      MSc Cybersecurity<br>
+      Sapienza Università di Roma
+    </div>
+  </header>
+
+  <nav class="strip" id="strip" aria-label="Weeks"></nav>
+
+  <div class="bar">
+    <h2>Homeworks</h2>
+    <input class="search" id="q" type="search" placeholder="filter: e.g. CLT, Caesar…" aria-label="Filter homeworks">
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <footer>Statistics · MSc Cybersecurity — Sapienza Università di Roma</footer>
+</div>
+
+<script>
+/* =========================================================
+   ADD A NEW HOMEWORK: copy one block below, change the
+   fields, and put the files in a folder with the same name
+   used in "href" (e.g. hw5/index.html).
+   ========================================================= */
+const HOMEWORKS = [
+  {
+    n: 4,
+    title: 'Penetration Score Process: LLN and CLT',
+    summary: 'n systems and m attackers with Bernoulli and Rademacher scores: total, average and normalized score, Law of Large Numbers and Central Limit Theorem.',
+    date: '2026-10-26',
+    tags: ['LLN', 'CLT', 'random walk', 'simulation'],
+    href: 'hw4/'
+  },
+];
+const TOTAL_WEEKS = 12;   // length of the week strip
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const list = [...HOMEWORKS].sort((a, b) => b.n - a.n);
+const done = new Set(HOMEWORKS.map(h => h.n));
+const next = Math.max(0, ...done) + 1;
+
+// week strip
+const strip = document.getElementById('strip');
+strip.innerHTML = '<span class="lbl">WEEK</span>' + Array.from({ length: Math.max(TOTAL_WEEKS, next) }, (_, i) => {
+  const k = i + 1, h = HOMEWORKS.find(x => x.n === k);
+  if (h) return `<a class="wk done" href="${esc(h.href)}" title="${esc(h.title)}">${pad(k)}</a>`;
+  return `<span class="wk${k === next ? ' next' : ''}" title="${k === next ? 'next homework' : ''}">${pad(k)}</span>`;
+}).join('');
+
+// cards
+function render(filter = '') {
+  const f = filter.trim().toLowerCase();
+  const shown = list.filter(h => !f || [h.title, h.summary, ...h.tags, 'hw' + h.n].join(' ').toLowerCase().includes(f));
+  let html = shown.map(h => `
+    <a class="card" href="${esc(h.href)}">
+      <span class="date">${esc(fmtDate(h.date))}</span>
+      <span class="no">${pad(h.n)}</span>
+      <h3>${esc(h.title)}</h3>
+      <p>${esc(h.summary)}</p>
+      <div class="tags">${h.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <span class="open">Open homework ${h.n} →</span>
+    </a>`).join('');
+  if (!f) html = `
+    <div class="card soon" aria-hidden="true">
+      <span class="no">${pad(next)}</span>
+      <h3>Next homework</h3>
+      <p>Coming next week.</p>
+    </div>` + html;
+  document.getElementById('grid').innerHTML = html || '<p class="empty">No homework matches this filter.</p>';
+}
+document.getElementById('q').addEventListener('input', e => render(e.target.value));
+render();
+</script>
+</body>
+</html>
