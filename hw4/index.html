@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HomeWork 4</title>
+<meta name="description" content="Homework 4 – Statistics (MSc Cybersecurity, Sapienza): Welford's recurrence formulas and the sampling distribution of mean and variance of hacker scores.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]})"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+<!-- ============ SIDE INDEX ============ -->
+<aside class="index">
+  <a class="back" href="../">← All homeworks</a>
+  <div class="brand">
+    <span class="stamp">Streaming Moments</span>
+    <div><small>Welford · sampling mean · sampling variance</small></div>
+  </div>
+  <nav id="toc">
+    <a href="#ex1"><span>01</span>Ex.1 · Derivation</a>
+    <a href="#code"><span>02</span>Ex.1 · Code</a>
+    <a href="#tracer"><span>03</span>Ex.1 · Step-by-step tracer</a>
+    <a href="#merge"><span>04</span>Ex.1 · Merging sensors</a>
+    <a href="#dist"><span>05</span>Ex.2 · Score distribution</a>
+    <a href="#exp"><span>06</span>Ex.2 · Hackers × systems</a>
+    <a href="#avg"><span>07</span>Ex.2 · Averages vs theory</a>
+    <a href="#spread"><span>08</span>Ex.2 · Variability vs n</a>
+    <a href="#answers"><span>09</span>Ex.2 · Conclusions</a>
+    <a href="#impl"><span>10</span>Implementation notes</a>
+  </nav>
+  <div class="meta">
+    Statistics · MSc Cybersecurity<br>
+    Sapienza Università di Roma<br>
+    <span class="who">Student: <b>Davide Palmieri 2058889</b></span>
+  </div>
+</aside>
+
+<main>
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <p class="kicker mono">CASE FILE · HOMEWORK 4 · A.Y. 2026/27</p>
+  <h1>Streaming Moments: Welford and the Sampling Distribution</h1>
+  <p class="sub">One pass over the data, three lines of code, no stored scores: we update mean and variance as each
+  attack lands, then ask what the sample statistics of <b>m</b> hackers tell us about the true scoring law.</p>
+  <dl class="casefile mono">
+    <div><dt>Ex. 1</dt><dd>Welford via Knuth's three moves + centre shift</dd></div>
+    <div><dt>Ex. 2</dt><dd>m hackers × n systems, scores in {0,…,10}</dd></div>
+    <div><dt>Estimators</dt><dd>x̄ₙ = Mₙ · sₙ² = SSₙ/(n−1)</dd></div>
+    <div><dt>Stack</dt><dd>vanilla JS + Canvas 2D, seeded PRNG, no chart libs</dd></div>
+  </dl>
+</header>
+
+<!-- ============ 01 DERIVATION ============ -->
+<section id="ex1" class="sec">
+  <div class="sec-head"><span class="num">01</span><h2>Ex.1 · Deriving Welford's recurrences</h2></div>
+  <p class="lede">Notation: \(x_1,x_2,\dots\) is the stream of scores, \(M_k\) the mean of the first \(k\) values,
+  \(SS_k=\sum_{i=1}^{k}(x_i-M_k)^2\) their sum of squared deviations, and \(\delta_k=x_k-M_{k-1}\) the "surprise"
+  of the new value. Knuth's derivation of the mean uses three moves; we apply <b>the same three moves</b> to \(SS_k\).
+  The only extra tool is a centre-shift rule, the same one that in mechanics is called the parallel-axis (Steiner) theorem.</p>
+
+  <div class="box">
+    <h3>The three moves, side by side</h3>
+    <div class="tablewrap"><table class="ledger mv">
+      <thead><tr><th>move</th><th>mean \(M_k\) (Knuth)</th><th>sum of squares \(SS_k\) (Welford)</th></tr></thead>
+      <tbody>
+        <tr><td>① split off the last value</td>
+            <td>\(kM_k=\sum_{i&lt;k}x_i+x_k\)</td>
+            <td>\(SS_k=\sum_{i&lt;k}(x_i-M_k)^2+(x_k-M_k)^2\)</td></tr>
+        <tr><td>② write the old part with the old state</td>
+            <td>\(\sum_{i&lt;k}x_i=(k-1)M_{k-1}\)</td>
+            <td>\(\sum_{i&lt;k}(x_i-M_k)^2=SS_{k-1}+(k-1)(M_k-M_{k-1})^2\) &nbsp;(centre shift, below)</td></tr>
+        <tr><td>③ isolate the increment</td>
+            <td>\(M_k=M_{k-1}+\dfrac{\delta_k}{k}\)</td>
+            <td>\(SS_k=SS_{k-1}+\delta_k\,(x_k-M_k)\)</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="two">
+    <div class="box">
+      <h3>Move ② · the centre-shift rule</h3>
+      <p>The first \(k-1\) scores have their squares measured from \(M_{k-1}\), but \(SS_k\) needs them measured from the new
+      centre \(M_k\). Write each deviation through the old centre, with \(d=M_k-M_{k-1}\):</p>
+      $$\sum_{i&lt;k}(x_i-M_k)^2=\sum_{i&lt;k}\big[(x_i-M_{k-1})-d\big]^2
+        =SS_{k-1}-2d\underbrace{\sum_{i&lt;k}(x_i-M_{k-1})}_{=\,0}+(k-1)\,d^2 .$$
+      <p>The cross term vanishes because deviations from their own mean always sum to zero. So
+      <b>moving the reference point by \(d\) adds (number of points)\(\times d^2\)</b>, exactly like the moment of inertia of
+      \(k-1\) unit masses when the axis is moved away from their centre of mass.</p>
+    </div>
+    <div class="figure">
+      <div class="fig-title">What happens when score xₖ arrives</div>
+      <svg id="shiftSvg" viewBox="0 0 420 210" role="img" aria-label="Old centre, new centre and new score on a line">
+        <line x1="20" y1="120" x2="400" y2="120" stroke="#16202a" stroke-width="1.5"/>
+        <g fill="#1d4f91" opacity=".75">
+          <circle cx="60" cy="120" r="6"/><circle cx="95" cy="120" r="6"/><circle cx="120" cy="120" r="6"/>
+          <circle cx="150" cy="120" r="6"/><circle cx="185" cy="120" r="6"/><circle cx="210" cy="120" r="6"/>
+        </g>
+        <circle cx="360" cy="120" r="7" fill="#c0392b"/>
+        <text x="360" y="148" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="#c0392b">xₖ</text>
+        <line x1="137" y1="60" x2="137" y2="135" stroke="#16202a" stroke-dasharray="4 3"/>
+        <text x="137" y="52" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="12" fill="#16202a">Mₖ₋₁</text>
+        <line x1="169" y1="80" x2="169" y2="135" stroke="#2e7d57" stroke-width="2"/>
+        <text x="175" y="76" font-family="IBM Plex Mono, monospace" font-size="12" fill="#2e7d57">Mₖ</text>
+        <path d="M137 168 L169 168" stroke="#2e7d57" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="153" y="186" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="#2e7d57">d = δ/k</text>
+        <path d="M137 200 L360 200" stroke="#c0392b" stroke-width="1.5"/>
+        <text x="300" y="194" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="#c0392b">δ = xₖ − Mₖ₋₁</text>
+        <text x="135" y="105" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="#5b6670">k−1 old scores</text>
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2e7d57"/></marker></defs>
+      </svg>
+      <p class="cap">The new score pulls the centre by only \(1/k\) of the surprise. The old points pay \((k-1)d^2\) for the
+      move, the new point contributes \((x_k-M_k)^2\).</p>
+    </div>
+  </div>
+
+  <div class="box">
+    <h3>Move ③ · putting the pieces together</h3>
+    <ol class="steps">
+      <li>From Knuth: \(d=M_k-M_{k-1}=\dfrac{\delta_k}{k}\) and \(x_k-M_k=\delta_k-\dfrac{\delta_k}{k}=\dfrac{k-1}{k}\,\delta_k\).</li>
+      <li>Insert both into ① and ②:
+        $$SS_k=SS_{k-1}+(k-1)\frac{\delta_k^2}{k^2}+\frac{(k-1)^2}{k^2}\,\delta_k^2
+              =SS_{k-1}+\frac{(k-1)\,\delta_k^2}{k^2}\,(1+k-1)=SS_{k-1}+\frac{k-1}{k}\,\delta_k^2 .$$</li>
+      <li>Recognise \(\frac{k-1}{k}\delta_k=x_k-M_k\) and split \(\delta_k^2\) into its two factors:
+        <div class="result">$$SS_k=SS_{k-1}+(x_k-M_{k-1})\,(x_k-M_k),\qquad SS_0=0,\ M_0=0$$</div></li>
+    </ol>
+    <p class="note">Two equivalent forms come out for free: \(SS_k=SS_{k-1}+\frac{k-1}{k}\delta_k^2\) shows that SS can never
+    decrease, while the product form is the one used in code because it needs no extra multiplication by \(\frac{k-1}{k}\).</p>
+  </div>
+
+  <div class="box">
+    <h3>Recurrence for the variance</h3>
+    <p>The sample variance is \(s_k^2=SS_k/(k-1)\) for \(k\ge2\). Dividing the boxed result by \(k-1\) and using
+    \(SS_{k-1}=(k-2)s_{k-1}^2\):</p>
+    $$s_k^2=\frac{k-2}{k-1}\,s_{k-1}^2+\frac{\delta_k^2}{k},\qquad k\ge 2\quad(\text{so } s_2^2=\delta_2^2/2).$$
+    <p>With divisor \(k\) instead (\(v_k=SS_k/k\)): \(\;v_k=\frac{k-1}{k}\,v_{k-1}+\frac{k-1}{k^2}\,\delta_k^2 .\)</p>
+    <p class="note">In code it is simpler to keep \(M_k\) and \(SS_k\) as state and divide only when a variance is requested.</p>
+  </div>
+</section>
+
+<!-- ============ 02 CODE ============ -->
+<section id="code" class="sec">
+  <div class="sec-head"><span class="num">02</span><h2>Ex.1 · The code: three lines</h2></div>
+  <p class="lede">The state is three numbers: how many scores have been absorbed, their centre and their sum of squares.
+  After the counter is increased, the core logic is the three lines that mirror moves ①–③.</p>
+  <div class="code-tabs" id="codeTabs">
+    <button data-v="js" class="on">JavaScript</button><button data-v="py">Python</button>
+  </div>
+<pre class="code" id="code-js"><span class="c">// s = { n: 0, avg: 0, ss: 0 }</span>
+<span class="k">function</span> <span class="n">absorb</span>(s, x) {
+  s.n++;
+  <span class="k">const</span> gap = x - s.avg;     <span class="c">// surprise w.r.t. the old centre</span>
+  s.avg += gap / s.n;          <span class="c">// the centre moves by 1/n of it</span>
+  s.ss  += gap * (x - s.avg);  <span class="c">// old gap × new gap</span>
+}
+<span class="k">const</span> <span class="n">sampleVar</span> = s =&gt; s.ss / (s.n - <span class="n">1</span>);   <span class="c">// divisor n−1</span></pre>
+<pre class="code" id="code-py" hidden><span class="c"># s = {"n": 0, "avg": 0.0, "ss": 0.0}</span>
+<span class="k">def</span> <span class="n">absorb</span>(s, x):
+    s[<span class="n">"n"</span>] += <span class="n">1</span>
+    gap = x - s[<span class="n">"avg"</span>]            <span class="c"># surprise w.r.t. the old centre</span>
+    s[<span class="n">"avg"</span>] += gap / s[<span class="n">"n"</span>]       <span class="c"># the centre moves by 1/n of it</span>
+    s[<span class="n">"ss"</span>]  += gap * (x - s[<span class="n">"avg"</span>]) <span class="c"># old gap × new gap</span>
+
+sample_var = <span class="k">lambda</span> s: s[<span class="n">"ss"</span>] / (s[<span class="n">"n"</span>] - <span class="n">1</span>)  <span class="c"># divisor n−1</span></pre>
+  <p class="note">The order of the lines is the derivation: <code>gap</code> is \(\delta_k\), computed with the centre
+  <em>before</em> the update; the last line multiplies it by the distance from the centre <em>after</em> the update.
+  Memory is constant and every score is read once, so the same function can sit on a live stream of IDS events or
+  log lines that are never stored. It is also numerically safer than the one-pass shortcut
+  \(\sum x^2-(\sum x)^2/n\), which subtracts two huge, almost equal numbers.</p>
+</section>
+
+<!-- ============ 03 TRACER ============ -->
+<section id="tracer" class="sec">
+  <div class="sec-head"><span class="num">03</span><h2>Ex.1 · Step-by-step tracer</h2></div>
+  <p class="lede">One hacker attacks systems one at a time, with scores drawn from the distribution of section 05.
+  Every row is one call of <code>absorb</code>, checked against the textbook definitions recomputed from scratch on all
+  the scores seen so far.</p>
+  <div class="tracer-ctl">
+    <button class="btn" id="trStep">Attack next system ▸</button>
+    <button class="btn" id="trPlay">Auto-play</button>
+    <button class="btn" id="trReset">Reset</button>
+    <span class="mono note" id="trInfo"></span>
+  </div>
+  <div class="two">
+    <div class="figure"><div class="fig-title">Running mean and variance of one hacker</div><canvas id="cvTrace" class="h300"></canvas></div>
+    <div class="figure"><div class="fig-title">Last updates</div><div class="tablewrap"><table class="ledger trace-table" id="trTable"></table></div></div>
+  </div>
+</section>
+
+<!-- ============ 04 MERGE ============ -->
+<section id="merge" class="sec">
+  <div class="sec-head"><span class="num">04</span><h2>Ex.1 · Beyond one stream: merging sensors</h2></div>
+  <p class="lede">In a real SOC the attempts of one attacker are seen by several sensors (firewall, IDS, WAF…), each
+  keeping its own <code>{n, avg, ss}</code>. The centre-shift rule of move ② also tells how to <b>merge two states</b>
+  without seeing any raw score. For groups A and B with \(\Delta=M_B-M_A\) and \(n=n_A+n_B\):</p>
+  $$M_{AB}=M_A+\Delta\,\frac{n_B}{n},\qquad SS_{AB}=SS_A+SS_B+\Delta^2\,\frac{n_A\,n_B}{n}.$$
+  <p class="lede">Each group pays its own centre shift (move ② applied to A and to B). Welford's update is the special case
+  of a group B made of a single score: \(n_B=1,\ SS_B=0,\ \Delta=\delta_k\), which gives back
+  \(SS_k=SS_{k-1}+\frac{k-1}{k}\delta_k^2\).</p>
+  <div class="toolbar">
+    <label>sensors <output id="sensOut" class="mono">4</output>
+      <input type="range" id="sens" min="1" max="8" step="1" value="4"></label>
+    <span class="note mono">one hacker, 600 attempts, each routed to a random sensor</span>
+  </div>
+  <div class="figure"><div class="tablewrap"><table class="ledger" id="mergeTable"></table></div><p class="cap" id="mergeNote"></p></div>
+</section>
+
+<!-- ============ 05 DISTRIBUTION ============ -->
+<section id="dist" class="sec">
+  <div class="sec-head"><span class="num">05</span><h2>Ex.2 · The score distribution</h2></div>
+  <p class="lede">Each penetration attempt gets an integer score \(X\in\{0,1,\dots,10\}\) (0 = repelled, 10 = full compromise)
+  drawn from a fixed pmf \(p_0,\dots,p_{10}\). Its theoretical moments are</p>
+  $$\mu=\sum_{j=0}^{10}j\,p_j,\qquad \sigma^2=\sum_{j=0}^{10}(j-\mu)^2p_j,\qquad \mu_4=\sum_{j=0}^{10}(j-\mu)^4p_j .$$
+  <p class="lede">The default is a <b>hardened-vs-exposed mixture</b>: most systems are patched and yield low scores, a minority
+  is exposed and yields high ones, so the law is bimodal and skewed, far from a bell curve. Pick another preset,
+  or <b>drag the bars</b> to draw your own distribution.</p>
+  <div class="pmf-presets" id="presets"></div>
+  <div class="two">
+    <div class="figure"><div class="fig-title">pmf of one score (drag to edit)</div><canvas id="cvPmf" class="h280" style="touch-action:none;cursor:ns-resize"></canvas></div>
+    <div>
+      <dl class="statrow mono" id="momRow"></dl>
+      <p class="note" id="pmfNote"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 EXPERIMENT ============ -->
+<section id="exp" class="sec">
+  <div class="sec-head"><span class="num">06</span><h2>Ex.2 · m hackers × n systems</h2></div>
+  <p class="lede">Each hacker \(j=1,\dots,m\) attacks \(n\) systems and receives a trajectory of \(n\) scores. Feeding them to
+  the Welford update gives, per hacker, the sampling mean \(\bar x^{(j)}=M_n\) and the sampling variance
+  \(s^{2\,(j)}=SS_n/(n-1)\). The experiment is then <b>repeated independently</b> for each selected \(n\).</p>
+
+  <section class="console" aria-label="Experiment parameters">
+    <div class="console-head">
+      <span class="tag mono">EXPERIMENT PARAMETERS</span>
+      <span id="status" class="status mono">idle</span>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label>m hackers</label>
+        <select id="m"><option>100</option><option>500</option><option selected>2000</option><option>5000</option><option>10000</option></select>
+      </div>
+      <div class="ctl">
+        <label>seed (reproducible runs)</label>
+        <div class="seedrow"><input id="seed" class="mono" value="welford-26" spellcheck="false"><button id="reseed" class="btn" title="random seed">⟳</button></div>
+      </div>
+      <div class="ctl run">
+        <button id="run" class="btn-run">Run experiment ▸</button>
+        <small id="cost" class="mono"></small>
+      </div>
+    </div>
+    <div class="ctl" style="margin-top:12px">
+      <label>values of n (systems per hacker)</label>
+      <div class="nchips" id="nchips"></div>
+    </div>
+  </section>
+
+  <div class="figure">
+    <div class="fig-title" id="ledgerTitle">Score ledger</div>
+    <canvas id="cvLedger" class="h300"></canvas>
+  </div>
+</section>
+
+<!-- ============ 07 AVERAGES ============ -->
+<section id="avg" class="sec">
+  <div class="sec-head"><span class="num">07</span><h2>Ex.2 · Averages across hackers vs theory</h2></div>
+  <p class="lede">For each \(n\): the average of the \(m\) sampling means against \(\mu\) and the average of the \(m\) sampling
+  variances against \(\sigma^2\). The ± column is the Monte-Carlo standard error of each average: a gap within 3 SE
+  (green) is simulation noise, not a real difference. The last column counts how many hackers, taken one by one,
+  <em>underestimate</em> σ².</p>
+  <div class="figure"><div class="tablewrap"><table class="ledger" id="avgTable"></table></div></div>
+  <div class="two">
+    <div class="figure"><div class="fig-title">Average of sampling means vs μ</div><canvas id="cvAvgMean" class="h260"></canvas></div>
+    <div class="figure"><div class="fig-title">Average of sampling variances vs σ² (and the divisor-n version)</div><canvas id="cvAvgVar" class="h260"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ 08 SPREAD ============ -->
+<section id="spread" class="sec">
+  <div class="sec-head"><span class="num">08</span><h2>Ex.2 · How n changes the variability</h2></div>
+  <p class="lede">Unbiased does not mean precise. The spread of the estimators across hackers shrinks as \(n\) grows,
+  following known laws:</p>
+  $$\mathrm{Var}(\bar x_n)=\frac{\sigma^2}{n},\qquad
+    \mathrm{Var}(s_n^2)=\frac{1}{n}\left(\mu_4-\frac{n-3}{n-1}\,\sigma^4\right)\;\approx\;\frac{\mu_4-\sigma^4}{n}.$$
+  <div class="figure">
+    <div class="fig-title">Standard deviation across hackers (log-log)</div>
+    <canvas id="cvSpread" class="h360"></canvas>
+    <p class="cap mono" id="spreadNote"></p>
+  </div>
+
+  <h3>Sampling distributions</h3>
+  <p class="lede">Histograms of the \(m\) sampling means (top) and sampling variances (bottom). The dashed curve on the
+  means is the CLT approximation \(\mathcal N(\mu,\sigma^2/n)\); the red lines are \(\mu\) and \(\sigma^2\).</p>
+  <div class="hist-grid" id="histMeans"></div>
+  <div class="hist-grid" id="histVars" style="margin-top:12px"></div>
+
+  <h3>The shape of the law matters: variance is harder to estimate when μ₄ is large</h3>
+  <p class="lede">Relative error of one hacker's variance estimate, \(\mathrm{sd}(s_n^2)/\sigma^2\), for the five preset
+  laws (theory). It depends on the kurtosis \(\mu_4/\sigma^4\), not on \(\mu\) or \(\sigma\): rare, extreme scores
+  (the "rare jackpot" law) make the variance much harder to pin down than a bell-shaped law.</p>
+  <div class="figure"><canvas id="cvKurt" class="h300"></canvas></div>
+
+  <h3>Audit budget: how many systems does one hacker need?</h3>
+  <p class="lede">Turning the laws around: the smallest \(n\) such that a single hacker's estimate reaches a target
+  precision, for the current law. Change the targets to plan a penetration-test campaign.</p>
+  <div class="toolbar">
+    <label>sd of x̄ ≤ <output id="tmOut" class="mono">0.25</output> points
+      <input type="range" id="tm" min="0.05" max="1" step="0.05" value="0.25"></label>
+    <label>sd of s² ≤ <output id="tvOut" class="mono">20%</output> of σ²
+      <input type="range" id="tv" min="0.05" max="0.5" step="0.05" value="0.2"></label>
+  </div>
+  <div class="figure"><div class="tablewrap"><table class="ledger" id="budgetTable"></table></div><p class="cap" id="budgetNote"></p></div>
+</section>
+
+<!-- ============ 09 ANSWERS ============ -->
+<section id="answers" class="sec">
+  <div class="sec-head"><span class="num">09</span><h2>Ex.2 · Conclusions</h2></div>
+  <p class="callout">Numbers in bold come from the current run
+  (<span id="a-dist"></span>, m = <span id="a-m"></span> hackers, seed “<span id="a-seed"></span>”).</p>
+
+  <div class="answer">
+    <h3>What do the comparisons show?</h3>
+    <p>For every n the cloud of sampling means is centred on μ = <span id="a-mu"></span> (largest gap in the run:
+    <b id="a-gapm"></b> standard errors) and the cloud of sampling variances on σ² = <span id="a-s2"></span>. This holds
+    already with very few systems: at n = <span id="a-nmin"></span> the average variance is <b id="a-vmin"></b>.
+    In other words \(\bar x_n\) and \(s_n^2\) are <b>unbiased</b>: \(E[\bar x_n]=\mu\) and \(E[s_n^2]=\sigma^2\) for each
+    \(n\), not just in the limit.</p>
+    <p>The divisor matters. Each hacker measures squares from their own centre \(\bar x\), which is the point that makes
+    the sum of squares smallest, so \(SS_n\) runs short. The centre-shift rule of Ex.1 quantifies it:
+    \(\sum(x_i-\mu)^2=SS_n+n(\bar x-\mu)^2\), and taking expectations \(n\sigma^2=E[SS_n]+\sigma^2\), so
+    \(E[SS_n]=(n-1)\sigma^2\). Dividing by \(n\) instead would give <b id="a-bmin"></b> at n = <span id="a-nmin2"></span>
+    (theory <span id="a-bias"></span>), the hollow points in the second chart.</p>
+  </div>
+
+  <div class="answer">
+    <h3>Why is this useful in inferential statistics?</h3>
+    <p>In a real assessment we observe one attacker, one audit, one week of logs, never the whole population of
+    attempts. We still want μ (how successful attacks are on average) and σ² (how unpredictable they are). Unbiasedness
+    means the recipe is aimed at the right target: repeated over many studies, errors cancel instead of piling up.
+    The variance laws then say <em>how far</em> one study can miss: the standard error \(s_n/\sqrt n\) is computed from the
+    same single sample, and with the CLT of HW3 it gives confidence intervals and tests.</p>
+    <p>But the averages over m hackers hide the experience of a single hacker. At n = <span id="a-n3"></span>,
+    <b id="a-under"></b> of the hackers underestimate σ², because the distribution of \(s^2\) is right-skewed: many small
+    values balanced by a few large ones. A single small sample tends to make attacks look <em>more predictable</em>
+    than they are.</p>
+  </div>
+
+  <div class="answer">
+    <h3>Effect of the number of systems n</h3>
+    <p>Raising n does not move the centres, which are already right: it tightens both clouds. From n = <span id="a-n1"></span>
+    to n = <span id="a-n2"></span> the spread of the sampling means goes from <b id="a-sdm1"></b> to <b id="a-sdm2"></b>
+    (theory σ/√n: <span id="a-thm1"></span> → <span id="a-thm2"></span>), the spread of the sampling variances from
+    <b id="a-sdv1"></b> to <b id="a-sdv2"></b>. Both follow \(1/\sqrt n\), so halving the error costs four times the systems.</p>
+    <p>How many systems are "enough" depends on the law, not only on n. The precision of \(\bar x\) depends on
+    \(\sigma^2\); the relative precision of \(s^2\) depends on the kurtosis \(\mu_4/\sigma^4\). With the current law the
+    audit-budget targets need <b id="a-nm"></b> systems for the mean and <b id="a-nv"></b> for the variance; for laws with
+    rare extreme scores (e.g. "rare jackpot") the variance becomes by far the more expensive quantity, because a handful of
+    full compromises dominates the sum of squares.</p>
+    <p>m, the number of hackers, has a different role: it does not improve any single estimate, it only sharpens our
+    <em>view</em> of the sampling distributions (averages, histograms), with Monte-Carlo error ∝ 1/√m.</p>
+  </div>
+</section>
+
+<!-- ============ 10 IMPLEMENTATION ============ -->
+<section id="impl" class="sec">
+  <div class="sec-head"><span class="num">10</span><h2>Implementation notes</h2></div>
+  <ul class="impl">
+    <li><b>One update everywhere.</b> Every per-hacker statistic is produced by the same <code>absorb</code> of section 02;
+      the averages and spreads across hackers are computed with it too, and the sensor demo uses the merge formula of section 04.</li>
+    <li><b>Sampling a discrete law.</b> Scores are drawn by inverse transform on the cumulative pmf of the 11 values.</li>
+    <li><b>Independent repetitions.</b> Each value of n is a fresh experiment with new trajectories, as the assignment asks.</li>
+    <li><b>Reproducibility.</b> The seed string is hashed (FNV-1a) into a <code>mulberry32</code> PRNG, with a separate
+      sub-stream for each n, so the same seed and law always give the same tables.</li>
+    <li><b>Exact theory.</b> μ, σ², μ₄, Var(s²) and the audit budget are computed exactly from the pmf.</li>
+    <li><b>No chart library.</b> All plots are drawn by hand on Canvas 2D (HiDPI-aware); only KaTeX is loaded for formulas.</li>
+  </ul>
+</section>
+
+<footer class="foot mono">HomeWork 4 · HW4 · Statistics, MSc Cybersecurity — Sapienza Università di Roma</footer>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
