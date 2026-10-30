@@ -128,7 +128,7 @@ const TOTAL_WEEKS = 12;   // length of the week strip
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad = n => String(n).padStart(2, '0');
 const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-const list = [...HOMEWORKS].sort((a, b) => b.n - a.n);
+const list = [...HOMEWORKS].sort((a, b) => a.n - b.n);
 const done = new Set(HOMEWORKS.map(h => h.n));
 const next = Math.max(0, ...done) + 1;
 
