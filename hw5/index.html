@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HomeWork 5</title>
+<meta name="description" content="Homework 5 – Statistics (MSc Cybersecurity, Sapienza): Riemann vs Lebesgue numerical integration and the numerical computation of the standard normal CDF.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]})"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+<aside class="index">
+  <a class="back" href="../">← All homeworks</a>
+  <div class="brand">
+    <span class="stamp">Two Ways to Slice</span>
+    <div><small>Riemann · Lebesgue · normal CDF</small></div>
+  </div>
+  <nav id="toc">
+    <a href="#idea"><span>01</span>Ex.1 · Columns vs layers</a>
+    <a href="#lab"><span>02</span>Ex.1 · Integration lab</a>
+    <a href="#conv"><span>03</span>Ex.1 · Accuracy &amp; cost</a>
+    <a href="#patho"><span>04</span>Ex.1 · Where they disagree</a>
+    <a href="#noformula"><span>05</span>Ex.2 · Why Φ has no formula</a>
+    <a href="#methods"><span>06</span>Ex.2 · Four ways to compute Φ</a>
+    <a href="#bench"><span>07</span>Ex.2 · Accuracy &amp; speed</a>
+    <a href="#inversion"><span>08</span>Bonus · Inversion method</a>
+    <a href="#concl"><span>09</span>Conclusions</a>
+    <a href="#impl"><span>10</span>Implementation notes</a>
+  </nav>
+  <div class="meta">
+    Statistics · MSc Cybersecurity<br>
+    Sapienza Università di Roma<br>
+    <span class="who">Student: <b>Davide Palmieri 2058889</b></span>
+  </div>
+</aside>
+
+<main>
+<header class="hero">
+  <p class="kicker mono">CASE FILE · HOMEWORK 5 · A.Y. 2026/27</p>
+  <h1>Two Ways to Slice an Area, and a Number with No Formula</h1>
+  <p class="sub">Riemann cuts the <b>domain</b> into columns, Lebesgue cuts the <b>range</b> into layers and measures what lies
+  underneath. We compute both, bracket the true value from below and above, find where they part ways, and then
+  compute the normal CDF, an integral that no elementary formula can express.</p>
+  <dl class="casefile mono">
+    <div><dt>Ex. 1</dt><dd>Darboux brackets vs layer-cake brackets on 10 functions</dd></div>
+    <div><dt>Ex. 2</dt><dd>Φ(x) by adaptive Simpson, Gauss–Legendre, Marsaglia series, Laplace fraction</dd></div>
+    <div><dt>Reference</dt><dd>50-digit values (mpmath), checked against the NIST table</dd></div>
+    <div><dt>Stack</dt><dd>vanilla JS + Canvas 2D, no chart or math libs</dd></div>
+  </dl>
+</header>
+
+<!-- ============ 01 IDEA ============ -->
+<section id="idea" class="sec">
+  <div class="sec-head"><span class="num">01</span><h2>Ex.1 · Columns vs layers</h2></div>
+  <div class="duo">
+    <div class="method" style="--c:var(--blue)">
+      <h3>Riemann: partition the domain</h3>
+      <p>Cut \([a,b]\) into \(N\) pieces \(I_i\) of width \(\Delta x\). On each piece take the lowest and the highest value
+      of \(f\): the <b>Darboux sums</b> trap the area between two staircases.</p>
+      $$L_N=\sum_i \inf_{I_i} f\;\Delta x\;\le\;\int_a^b f\;\le\;U_N=\sum_i \sup_{I_i} f\;\Delta x$$
+      <p>\(f\) is Riemann-integrable exactly when the gap \(U_N-L_N\) can be made as small as we like. A cheap point
+      estimate in between is the midpoint sum \(\sum_i f(m_i)\Delta x\).</p>
+    </div>
+    <div class="method" style="--c:var(--red)">
+      <h3>Lebesgue: partition the range</h3>
+      <p>Cut the values \([y_{\min},y_{\max}]\) into \(M\) levels \(y_j\) of height \(\Delta y\). For each level, ask
+      <em>how much of the domain</em> lies above it: the measure of the preimage \(\{f>y\}\).</p>
+      $$\int f\,d\mu = y_{\min}(b-a)+\int_{y_{\min}}^{y_{\max}}\mu(\{x:f(x)>y\})\,dy$$
+      <p>Since \(y\mapsto\mu(\{f>y\})\) is decreasing, the layers also give a lower and an upper bound, and their gap is
+      at most \(\Delta y\,(b-a)\) <b>for every bounded measurable \(f\)</b>, however wild. This is the same as squeezing
+      \(f\) between two simple functions that are constant on each preimage.</p>
+    </div>
+  </div>
+  <p class="lede">The key difference is <b>what each method needs</b>. Riemann needs the values of \(f\) on intervals.
+  Lebesgue needs the <em>measure</em> of the sets \(\{f>y\}\), which can be complicated sets, not intervals.
+  Our numerical Lebesgue computes those measures <b>exactly</b>: on each monotone piece of \(f\) it finds the point where
+  \(f\) crosses the level by bisection, and adds up the lengths. It does not estimate them by sampling.</p>
+</section>
+
+<!-- ============ 02 LAB ============ -->
+<section id="lab" class="sec">
+  <div class="sec-head"><span class="num">02</span><h2>Ex.1 · Integration lab</h2></div>
+  <div class="toolbar">
+    <label>function <select id="fnSel" class="select"></select></label>
+    <label>N columns <output id="nOut" class="mono">16</output><input type="range" id="nSl" min="2" max="400" step="1" value="16"></label>
+    <label>M layers <output id="mOut" class="mono">16</output><input type="range" id="mSl" min="2" max="400" step="1" value="16"></label>
+  </div>
+  <p class="note" id="fnNote"></p>
+  <div class="duo">
+    <div class="figure"><div class="fig-title">Riemann · lower and upper staircases (Darboux)</div><canvas id="cvRie" class="h300"></canvas></div>
+    <div class="figure"><div class="fig-title">Lebesgue · layers and their preimages on the x-axis</div><canvas id="cvLeb" class="h300"></canvas></div>
+  </div>
+  <div class="figure"><div class="tablewrap"><table class="ledger" id="labTable"></table></div></div>
+</section>
+
+<!-- ============ 03 CONVERGENCE ============ -->
+<section id="conv" class="sec">
+  <div class="sec-head"><span class="num">03</span><h2>Ex.1 · Accuracy, convergence and cost</h2></div>
+  <p class="lede">For the selected function (chosen in the lab above): errors and bracket widths as the resolution
+  N = M grows (log-log). Resolution is not cost, though: one Riemann column costs 1 evaluation (midpoint) or 2–3
+  (Darboux), one Lebesgue level costs about 60 evaluations per monotone piece for the bisection. The evaluation counts
+  are reported under the chart and in the table below.</p>
+  <div class="figure"><canvas id="cvConv" class="h360"></canvas><p class="cap mono" id="convNote"></p></div>
+  <h3>All functions at a glance (N = M = 1,000)</h3>
+  <div class="figure"><div class="tablewrap"><table class="ledger" id="allTable"></table></div><p class="cap" id="allNote"></p></div>
+</section>
+
+<!-- ============ 04 PATHOLOGICAL ============ -->
+<section id="patho" class="sec">
+  <div class="sec-head"><span class="num">04</span><h2>Ex.1 · Where the two approaches disagree</h2></div>
+  <p class="lede">The Darboux gap \(U_N-L_N\) as \(N\) grows, computed exactly (no sampling) for the four interesting cases.
+  If the gap goes to 0 the function is Riemann-integrable; if it stays positive, only Lebesgue can integrate it.</p>
+  <div class="figure"><canvas id="cvGap" class="h330"></canvas></div>
+  <div class="fn-cards">
+    <div class="fn-card">
+      <span class="tagline">Riemann ✗ · Lebesgue = 0</span>
+      <h3>Dirichlet \(1_{\mathbb Q}\)</h3>
+      <p>Every interval contains rationals and irrationals, so \(\sup=1\), \(\inf=0\) on every column: \(L_N=0\), \(U_N=1\)
+      for every \(N\). For Lebesgue, \(\{f>y\}=\mathbb Q\cap[0,1]\) for \(0\le y&lt;1\): a countable set, measure 0. The
+      integral is 0.</p>
+      <p class="note">A computer cannot help here: every float is rational, so the midpoint sum returns 1. The value 0
+      comes from the measure, which is a theorem (countable sets are null), not from any sample.</p>
+    </div>
+    <div class="fn-card">
+      <span class="tagline">Riemann ✓ · Lebesgue = 0</span>
+      <h3>Thomae (popcorn)</h3>
+      <p>\(f(p/q)=1/q\), 0 on irrationals. \(\inf=0\) everywhere, and we compute \(\sup\) on each column <b>exactly</b>: it is
+      \(1/q_{\min}\), where \(q_{\min}\) is the smallest denominator of a fraction inside the column. \(U_N\to0\), slowly,
+      roughly like \(\log N/N\): integrable, with integral 0, even though \(f\) is discontinuous at every rational.</p>
+    </div>
+    <div class="fn-card">
+      <span class="tagline">Riemann ✗ · Lebesgue = ½</span>
+      <h3>Fat Cantor set \(1_C\)</h3>
+      <p>Smith–Volterra–Cantor set: from \([0,1]\) remove, at step \(k\), an open middle piece of length \(4^{-k}\) from each
+      of the \(2^{k-1}\) remaining intervals. What is left contains no interval, yet has measure
+      \(1-\sum_k 2^{k-1}4^{-k}=\tfrac12\). So \(L_N=0\) always, \(U_N\to\tfrac12\): the gap never closes. Lebesgue: the
+      integral is \(\mu(C)=\tfrac12\).</p>
+      <p class="note">Unlike Dirichlet, here the "bad" set has positive measure, which is why Riemann fails: Riemann
+      integrability means the discontinuities form a null set (Lebesgue's criterion).</p>
+    </div>
+    <div class="fn-card">
+      <span class="tagline">improper Riemann · ordinary Lebesgue</span>
+      <h3>\(1/\sqrt{x}\) on \((0,1]\)</h3>
+      <p>Unbounded: the first column has \(\sup=\infty\), so \(U_N=\infty\) and the Riemann integral exists only as an
+      improper limit. For Lebesgue, \(\mu(\{f>y\})=\min(1,1/y^2)\) is integrable over \([0,\infty)\) and gives 2 directly.
+      Numerically we stop the layers at a height \(T\), and the missing tail is exactly \(1/T\).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 NO FORMULA ============ -->
+<section id="noformula" class="sec">
+  <div class="sec-head"><span class="num">05</span><h2>Ex.2 · Why Φ has no formula</h2></div>
+  $$\Phi(x)=\int_{-\infty}^{x}\varphi(t)\,dt,\qquad \varphi(t)=\frac{1}{\sqrt{2\pi}}e^{-t^2/2}.$$
+  <div class="two">
+    <div class="box">
+      <h3>Liouville's theorem (1835)</h3>
+      <p>Elementary functions are those built from polynomials, \(\exp\), \(\log\), roots and trigonometric functions
+      with finitely many operations and compositions. Liouville proved a criterion, sharpened by Rosenlicht (1972):
+      if \(r,s\) are rational functions and \(s\) is not constant, then</p>
+      $$\int r(t)\,e^{s(t)}\,dt \text{ is elementary} \iff \exists\,R \text{ rational with } R'+s'R=r .$$
+      <p>Here \(r=1\), \(s=-t^2/2\), so we would need a rational \(R\) with \(R'-tR=1\).</p>
+      <ol class="steps">
+        <li><b>No poles.</b> If \(R\) had a pole of order \(k\) at \(c\), then \(R'\) has one of order \(k+1\) and
+        \(tR\) at most \(k\): the left side would have a pole, the right side (1) has none. So \(R\) is a polynomial.</li>
+        <li><b>Wrong degree.</b> If \(R\) is a polynomial of degree \(d\ge0\), \(tR\) has degree \(d+1\) and \(R'\) less,
+        so \(R'-tR\) has degree \(d+1\ge1\), never the constant 1. And \(R=0\) gives 0, not 1.</li>
+      </ol>
+      <p>No such \(R\) exists, so \(\int e^{-t^2/2}dt\) is not elementary, and neither is Φ. The Risch algorithm turns
+      this kind of argument into a decision procedure used by computer algebra systems.</p>
+    </div>
+    <div class="box">
+      <h3>erf: a name, not an algorithm</h3>
+      <p>The error function gives Φ an exact closed form:</p>
+      $$\operatorname{erf}(z)=\frac{2}{\sqrt\pi}\int_0^z e^{-u^2}du,\qquad \Phi(x)=\tfrac12\big[1+\operatorname{erf}(x/\sqrt2)\big].$$
+      <p>This is a real gain: erf has known derivatives, series, asymptotics and identities, so Φ can be manipulated
+      symbolically. But <b>naming</b> an integral does not compute it. To get digits, someone still has to evaluate
+      erf with an algorithm: quadrature, series, continued fractions or rational fits.</p>
+      <p>This is not special to erf. Even "elementary" \(e^x\) or \(\sin x\) have no finite formula in the four
+      operations: your CPU's math library evaluates them with range reduction and polynomial approximations. The
+      difference between "elementary" and "special" is about <em>symbolic</em> closure, not about numerical
+      difficulty.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 METHODS ============ -->
+<section id="methods" class="sec">
+  <div class="sec-head"><span class="num">06</span><h2>Ex.2 · Four ways to compute Φ</h2></div>
+  <p class="lede">All methods use the symmetry \(\Phi(-x)=1-\Phi(x)\) and \(\Phi(0)=\tfrac12\), so they only need the
+  integral from 0 to \(|x|\) or the right tail \(Q(x)=1-\Phi(x)\). Note that the left tail \(\Phi(-x)\) for large \(x\) is
+  a tiny number: computing it as \(\tfrac12-(\text{something close to }\tfrac12)\) destroys its relative accuracy.</p>
+
+  <div class="method" style="--c:var(--blue)">
+    <h3>A · Adaptive Simpson (numerical integration)</h3>
+    <p>Simpson on \([0,|x|]\), but each panel is split in two only where the two estimates disagree more than a
+    tolerance \(\varepsilon\), with Richardson correction \(\tfrac{1}{15}(S_2-S_1)\). Effort goes where \(\varphi\) curves
+    most. Then \(\Phi(x)=\tfrac12\pm\int_0^{|x|}\varphi\).</p>
+  </div>
+  <div class="method" style="--c:var(--green)">
+    <h3>B · Gauss–Legendre quadrature (numerical integration)</h3>
+    <p>\(\int_0^{|x|}\varphi\approx\sum_k w_k\varphi(t_k)\) with the nodes at the zeros of the Legendre polynomial
+    \(P_n\). An \(n\)-point rule is exact for polynomials of degree \(2n-1\), so for a smooth integrand the error drops
+    faster than any power of \(n\). Nodes and weights are computed at load time by Newton's method on \(P_n\), and the
+    interval is split into panels of width ≤ 1.</p>
+  </div>
+  <div class="method" style="--c:var(--gold)">
+    <h3>C · Marsaglia's positive series</h3>
+    <p>Integrating by parts repeatedly gives (Marsaglia, 2004)</p>
+    $$\Phi(x)=\tfrac12+\varphi(x)\left(x+\frac{x^3}{3}+\frac{x^5}{3\cdot5}+\frac{x^7}{3\cdot5\cdot7}+\cdots\right),$$
+    <p>where each term is the previous one times \(x^2/(2k+1)\). Unlike the Taylor series of erf, whose terms alternate
+    in sign and cancel catastrophically for \(|x|\gtrsim3\), all these terms are positive: no cancellation.</p>
+  </div>
+  <div class="method" style="--c:var(--red)">
+    <h3>D · Laplace's continued fraction (tails)</h3>
+    $$Q(x)=1-\Phi(x)=\cfrac{\varphi(x)}{x+\cfrac{1}{x+\cfrac{2}{x+\cfrac{3}{x+\cdots}}}},\qquad x>0 .$$
+    <p>It converges fast exactly where the other methods struggle, for large \(x\), and returns the tail itself, so
+    \(\Phi(-x)=Q(x)\) keeps full <em>relative</em> accuracy even at \(10^{-23}\). Evaluated bottom-up with \(K\) levels.</p>
+  </div>
+  <div class="method" style="--c:var(--ink)">
+    <h3>Hybrid · our final method</h3>
+    <p>Series C for \(|x|&lt;2\), continued fraction D for \(|x|\ge2\) with \(K=\lceil 40+320/x^2\rceil\) levels, each used where it is accurate, with the tail
+    computed directly instead of as \(1-\Phi\).</p>
+  </div>
+
+  <h3>Calculator</h3>
+  <div class="toolbar">
+    <label>x <input type="number" id="xIn" class="select" value="1.96" step="0.01" style="width:110px"></label>
+    <label>Simpson tolerance ε <select id="tolSel" class="select"><option value="1e-6">1e-6</option><option value="1e-9">1e-9</option><option value="1e-12" selected>1e-12</option><option value="1e-15">1e-15</option></select></label>
+    <label>Gauss–Legendre points n <select id="glSel" class="select"><option>4</option><option>8</option><option selected>16</option><option>24</option></select></label>
+  </div>
+  <div class="two">
+    <div class="figure"><div class="tablewrap"><table class="ledger" id="calcTable"></table></div><p class="cap" id="calcNote"></p></div>
+    <div class="figure"><div class="fig-title">Φ(x) is the shaded area</div><canvas id="cvPhi" class="h260"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ 07 BENCHMARK ============ -->
+<section id="bench" class="sec">
+  <div class="sec-head"><span class="num">07</span><h2>Ex.2 · Accuracy and speed against a trusted reference</h2></div>
+  <p class="lede">Reference values: Φ(x) at x = −10, −9.75, …, 10 computed with 50 significant digits in the
+  <code>mpmath</code> arbitrary-precision library and checked against the NIST/SEMATECH table of the standard normal
+  distribution. Below, the <b>relative</b> error of each method, the one that matters for small probabilities such as
+  p-values or false-positive rates in an IDS.</p>
+  <div class="figure"><canvas id="cvErr" class="h380"></canvas><p class="cap mono" id="errNote"></p></div>
+  <div class="two">
+    <div class="figure"><div class="fig-title">Reference points</div><div class="tablewrap"><table class="ledger" id="refTable"></table></div></div>
+    <div class="figure"><div class="fig-title">Speed (this device) and worst relative error on [−10, 10]</div><div class="tablewrap"><table class="ledger" id="speedTable"></table></div>
+      <p class="cap" id="speedNote"></p></div>
+  </div>
+</section>
+
+<!-- ============ 08 INVERSION ============ -->
+<section id="inversion" class="sec">
+  <div class="sec-head"><span class="num">08</span><h2>Bonus · From Φ to normal random numbers</h2></div>
+  <p class="lede">In the lecture of 5 November: a uniform \(U\) on \([0,1]\) becomes a sample of any distribution through
+  its inverse CDF, \(X=\Phi^{-1}(U)\). With an accurate Φ we can invert it by Newton's method,
+  \(x\leftarrow x-\frac{\Phi(x)-u}{\varphi(x)}\), using our hybrid Φ. Where Φ is steep (around 0), many values of \(u\)
+  land in a short x-interval: that is where the samples pile up.</p>
+  <div class="toolbar">
+    <label>samples <select id="invN" class="select"><option>1000</option><option>10000</option><option selected>100000</option></select></label>
+    <button class="btn" id="invRun">Draw ▸</button>
+  </div>
+  <div class="figure"><canvas id="cvInv" class="h300"></canvas><p class="cap mono" id="invNote"></p></div>
+</section>
+
+<!-- ============ 09 CONCLUSIONS ============ -->
+<section id="concl" class="sec">
+  <div class="sec-head"><span class="num">09</span><h2>Conclusions</h2></div>
+  <div class="answer">
+    <h3>Riemann vs Lebesgue</h3>
+    <p>On every Riemann-integrable function of the list both methods converge to the same value: the Darboux brackets
+    and the layer brackets close on the same number (section 03). They differ in <b>how</b> they get there.
+    The midpoint Riemann sum is the cheapest and most accurate on smooth functions (error ∝ 1/N²). Our Lebesgue
+    computes exact preimages, so it is very accurate per level, but each level costs a root search: in evaluations it
+    is the more expensive route.</p>
+    <p>They part ways on functions whose bad points are dense: Dirichlet and the fat Cantor indicator keep a Darboux gap
+    of 1 and ½ forever, while Lebesgue gives 0 and ½. Thomae shows the boundary of Riemann's theory: discontinuous on
+    a dense set, but a null one, so still integrable. And the Lebesgue answers for the pathological cases come from
+    measure theory, not from sampling, because a computer only ever sees rational numbers.</p>
+  </div>
+  <div class="answer">
+    <h3>The normal CDF</h3>
+    <p>Liouville's theorem forbids an elementary formula for Φ. erf gives it an exact name, but numbers still require
+    an algorithm. Both quadratures reach machine precision in the centre, but they give Φ(−x) as ½ minus an
+    integral, which loses all relative accuracy in the left tail. The positive series avoids the cancellation of the
+    erf series, and the continued fraction handles the tails directly. The hybrid keeps a relative error of about
+    \(10^{-15}\) from −10 to 10 at a fraction of a microsecond per call (section 07).</p>
+  </div>
+</section>
+
+<!-- ============ 10 IMPLEMENTATION ============ -->
+<section id="impl" class="sec">
+  <div class="sec-head"><span class="num">10</span><h2>Implementation notes</h2></div>
+  <ul class="impl">
+    <li><b>Exact Darboux sums.</b> Each function lists its monotone pieces and jumps, so inf and sup on a column are taken
+      at the column ends, at interior breakpoints and at one-sided limits. For Thomae the sup is \(1/q_{\min}\), found by
+      scanning denominators.</li>
+    <li><b>Exact preimages.</b> \(\mu(\{f>y\})\) is the total length of the parts of each monotone piece above \(y\),
+      found by bisection to machine precision (counted as evaluations). For Dirichlet, Thomae and the fat Cantor set,
+      marked <span class="oracle">measure oracle</span>, the measure comes from the theorem (countable sets are null,
+      \(\mu(C)=\tfrac12\)), since it cannot be computed from point values.</li>
+    <li><b>Fat Cantor set.</b> Membership and "does a column meet C" are decided by descending the construction to
+      depth 26 (removed pieces shorter than \(10^{-15}\)).</li>
+    <li><b>Gauss–Legendre.</b> Nodes and weights computed at start-up by Newton's method on the three-term recurrence
+      of \(P_n\).</li>
+    <li><b>Reference.</b> <code>mpmath.ncdf</code> with 50 digits, embedded as a table; timings with
+      <code>performance.now()</code> over repeated calls.</li>
+    <li><b>No chart library.</b> All plots are drawn by hand on Canvas 2D; only KaTeX is loaded for formulas.</li>
+  </ul>
+</section>
+
+<footer class="foot mono">HomeWork 5 · HW5 · Statistics, MSc Cybersecurity — Sapienza Università di Roma</footer>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
