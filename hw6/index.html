@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HomeWork 6</title>
+<meta name="description" content="Homework 6 – Statistics (MSc Cybersecurity, Sapienza): contingency tables, independence, chi-square and p-values on real data (NSL-KDD, Berkeley admissions) and random generators.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]})"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+<aside class="index">
+  <a class="back" href="../">← All homeworks</a>
+  <div class="brand">
+    <span class="stamp">Does X Tell Us Y?</span>
+    <div><small>contingency · χ² · independence</small></div>
+  </div>
+  <nav id="toc">
+    <a href="#theory"><span>01</span>Independence: two languages</a>
+    <a href="#data"><span>02</span>Choose the data</a>
+    <a href="#table"><span>03</span>Contingency table</a>
+    <a href="#expected"><span>04</span>What independence predicts</a>
+    <a href="#chi"><span>05</span>χ², p-value, effect size</a>
+    <a href="#causal"><span>06</span>Association ≠ causation</a>
+    <a href="#concl"><span>07</span>Conclusions</a>
+    <a href="#impl"><span>08</span>Implementation notes</a>
+  </nav>
+  <div class="meta">
+    Statistics · MSc Cybersecurity<br>
+    Sapienza Università di Roma<br>
+    <span class="who">Student: <b>Davide Palmieri 2058889</b></span>
+  </div>
+</aside>
+
+<main>
+<header class="hero">
+  <p class="kicker mono">CASE FILE · HOMEWORK 6 · A.Y. 2026/27</p>
+  <h1>Does Knowing X Tell Us Anything About Y?</h1>
+  <p class="sub">From raw pairs \((x_k,y_k)\) to a contingency table, from the table to the one that independence would
+  produce, and from the gap between the two to a verdict. On real network-intrusion records, on the most famous
+  admissions dataset in statistics, and on two random number generators, one of which is broken.</p>
+  <dl class="casefile mono">
+    <div><dt>Data</dt><dd>NSL-KDD (22,544 connections) · Berkeley 1973 (4,526 applicants) · CSPRNG vs LCG · your CSV</dd></div>
+    <div><dt>Output</dt><dd>joint, marginal, conditional tables · expected table · residuals</dd></div>
+    <div><dt>Tests</dt><dd>Pearson χ², asymptotic p-value, permutation p-value, Cramér's V, Mantel–Haenszel</dd></div>
+    <div><dt>Stack</dt><dd>vanilla JS + Canvas 2D, own incomplete-gamma code</dd></div>
+  </dl>
+</header>
+
+<!-- ============ 01 THEORY ============ -->
+<section id="theory" class="sec">
+  <div class="sec-head"><span class="num">01</span><h2>Independence in two languages</h2></div>
+  <div class="duo">
+    <div class="method" style="--c:var(--blue)">
+      <h3>In statistics: frequencies</h3>
+      <p>Observe two variables on the same \(n\) units and count the pairs: \(n_{ij}\) units have \(X=x_i\) and \(Y=y_j\).
+      Row and column totals are the margins \(n_{i\cdot}=\sum_j n_{ij}\), \(n_{\cdot j}=\sum_i n_{ij}\).</p>
+      <p>\(X\) and \(Y\) are <b>independent</b> in the data when every conditional distribution of \(Y\), one per value of
+      \(X\), has the same shape as the overall distribution of \(Y\):</p>
+      $$\frac{n_{ij}}{n_{i\cdot}}=\frac{n_{\cdot j}}{n}\ \ \forall i,j
+        \iff f_{ij}=f_{i\cdot}\,f_{\cdot j}
+        \iff n_{ij}=\hat n_{ij}=\frac{n_{i\cdot}\,n_{\cdot j}}{n}.$$
+      <p>Knowing the row tells you nothing new about the column. Real data never hit this ideal exactly, so independence
+      becomes a question of <em>distance</em> from it.</p>
+    </div>
+    <div class="method" style="--c:var(--red)">
+      <h3>In probability: a definition</h3>
+      <p>In Kolmogorov's space \((\Omega,\mathcal F,P)\), \(X\) and \(Y\) are random variables (measurable maps). They are
+      independent when, for every pair of values,</p>
+      $$P(X=x_i,\,Y=y_j)=P(X=x_i)\,P(Y=y_j),$$
+      <p>equivalently \(P(Y=y_j\mid X=x_i)=P(Y=y_j)\), since \(P(B\mid A)=P(A\cap B)/P(A)\) by definition. The second form
+      is the intuitive one (conditioning does not change the distribution), the product is its algebraic form.
+      The frequency identity on the left is exactly what motivates this definition: in probability it is not a theorem,
+      it is the rule.</p>
+    </div>
+  </div>
+  <div class="box">
+    <h3>Measuring the distance: Pearson's χ²</h3>
+    $$\chi^2=\sum_{i=1}^{r}\sum_{j=1}^{c}\frac{(n_{ij}-\hat n_{ij})^2}{\hat n_{ij}},\qquad
+      \mathrm{df}=(r-1)(c-1),\qquad V=\sqrt{\frac{\chi^2}{n\,(\min(r,c)-1)}}\in[0,1].$$
+    <p>Each cell compares observed and expected counts; dividing by \(\hat n_{ij}\) puts small and large cells on the
+    same scale (a miss of 10 matters more where 20 were expected than where 2,000 were). Why \((r-1)(c-1)\) degrees of
+    freedom: once the margins are fixed, filling \(r-1\) rows and \(c-1\) columns of the table determines the rest.</p>
+    <p><b>p-value (optional part).</b> If \(X\) and \(Y\) were really independent, \(\chi^2\) would follow approximately a
+    chi-square distribution with df degrees of freedom. The p-value is the probability, under independence, of a
+    \(\chi^2\) at least as large as the observed one:
+    \(p=P(\chi^2_{\mathrm{df}}\ge\chi^2_{\mathrm{obs}})=Q\!\left(\tfrac{\mathrm{df}}2,\tfrac{\chi^2_{\mathrm{obs}}}2\right)\),
+    the regularized upper incomplete gamma function, computed here from scratch. A small p says the data would be
+    surprising if the variables were independent.</p>
+    <p class="note">χ² grows with \(n\): the same proportions observed on ten times more units give ten times the χ².
+    That is why we also report Cramér's \(V\), which does not depend on \(n\), and test it in section 05.</p>
+  </div>
+</section>
+
+<!-- ============ 02 DATA ============ -->
+<section id="data" class="sec">
+  <div class="sec-head"><span class="num">02</span><h2>Choose the data</h2></div>
+  <p class="lede">Every table below is built <b>programmatically from raw records</b>, one record per unit: the code
+  scans the pairs \((x_k,y_k)\), discovers the levels and counts. Pick a dataset and the two variables.</p>
+  <div class="ds-grid" id="dsGrid"></div>
+  <div id="csvBox" hidden>
+    <p class="note">Paste a CSV with a header row (comma or semicolon), or load a file. Numeric columns with many distinct
+    values are cut into quantile classes.</p>
+    <textarea class="csv" id="csvText" spellcheck="false">os,attack,severity
+linux,ssh_bruteforce,high
+windows,phishing,medium
+windows,ransomware,high
+linux,ssh_bruteforce,medium
+macos,phishing,low
+windows,phishing,medium
+linux,web_exploit,high
+windows,ransomware,high
+macos,phishing,medium
+linux,web_exploit,medium
+windows,phishing,low
+linux,ssh_bruteforce,high</textarea>
+    <div class="toolbar"><input type="file" id="csvFile" accept=".csv,.txt"><button class="btn" id="csvLoad">Use this CSV ▸</button></div>
+  </div>
+  <div class="toolbar">
+    <label>X (rows) <select id="xSel" class="select"></select></label>
+    <label>Y (columns) <select id="ySel" class="select"></select></label>
+    <label id="binLbl" hidden>numeric classes <select id="binSel" class="select"><option>3</option><option selected>4</option><option>5</option></select></label>
+  </div>
+  <p class="note" id="dsNote"></p>
+  <div class="preview" id="preview"></div>
+</section>
+
+<!-- ============ 03 TABLE ============ -->
+<section id="table" class="sec">
+  <div class="sec-head"><span class="num">03</span><h2>Contingency table, margins and conditionals</h2></div>
+  <div class="viewseg" id="viewSeg">
+    <button data-v="n" class="on">counts n<sub>ij</sub></button>
+    <button data-v="f">joint f<sub>ij</sub></button>
+    <button data-v="row">rows: f(Y | X)</button>
+    <button data-v="col">columns: f(X | Y)</button>
+  </div>
+  <div class="figure"><div class="tablewrap" id="ctWrap"></div><p class="cap" id="ctCap"></p></div>
+  <div class="figure">
+    <div class="fig-title">Mosaic: width = f(X), height inside each column = f(Y | X)</div>
+    <canvas id="cvMosaic" class="h330"></canvas>
+    <p class="cap">Under independence every column would be cut at the <b>same heights</b> (the dashed lines, the
+    marginal f(Y)), so the tiles would form straight horizontal bands. Steps between columns are dependence made
+    visible.</p>
+  </div>
+</section>
+
+<!-- ============ 04 EXPECTED ============ -->
+<section id="expected" class="sec">
+  <div class="sec-head"><span class="num">04</span><h2>What independence would predict</h2></div>
+  <p class="lede">The expected table \(\hat n_{ij}=n_{i\cdot}n_{\cdot j}/n\) has the <em>same margins</em> as the data but
+  no association at all. The heat map shows the Pearson residuals \(r_{ij}=(n_{ij}-\hat n_{ij})/\sqrt{\hat n_{ij}}\):
+  their squares add up to χ², so they show <b>where</b> the dependence lives. Red: more than independence predicts,
+  blue: fewer. \(|r|>2\) is unusual under independence.</p>
+  <div class="two">
+    <div class="figure"><div class="fig-title">Expected counts n̂ᵢⱼ and contribution to χ²</div><div class="tablewrap" id="expWrap"></div></div>
+    <div class="figure"><div class="fig-title">Pearson residuals</div><canvas id="cvResid" class="h300"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ 05 CHI ============ -->
+<section id="chi" class="sec">
+  <div class="sec-head"><span class="num">05</span><h2>χ², p-value and effect size</h2></div>
+  <dl class="kpi" id="kpi"></dl>
+  <div id="verdict" class="verdict"></div>
+  <div id="warnBox"></div>
+  <div class="two">
+    <div class="figure">
+      <div class="fig-title">Permutation test: χ² of 999 shuffled datasets</div>
+      <canvas id="cvPerm" class="h300"></canvas>
+      <p class="cap" id="permCap"></p>
+    </div>
+    <div class="figure">
+      <div class="fig-title">Same proportions, more units</div>
+      <div class="toolbar"><label>multiply n by <output id="kOut" class="mono">1</output>
+        <input type="range" id="kSl" min="0" max="12" step="1" value="6"></label></div>
+      <canvas id="cvScale" class="h230"></canvas>
+      <p class="cap" id="scaleCap"></p>
+    </div>
+  </div>
+  <p class="note">The permutation test needs no approximation: shuffling the Y labels destroys any link with X while
+  keeping both margins, so the shuffled χ² values show what independence really produces for <em>this</em> table. It is
+  the safe choice when some expected counts are small and the chi-square approximation is doubtful.</p>
+</section>
+
+<!-- ============ 06 CAUSALITY ============ -->
+<section id="causal" class="sec">
+  <div class="sec-head"><span class="num">06</span><h2>Association is not causation: Berkeley, 1973</h2></div>
+  <p class="lede">Graduate admissions at UC Berkeley, fall 1973 (Bickel, Hammel &amp; O'Connell, <em>Science</em>, 1975). The
+  aggregated table of gender × outcome is strongly dependent: men were admitted more often. Is the admission process
+  biased against women? Condition on the third variable, the department applied to.</p>
+  <div class="figure"><div class="fig-title">Admission rate by department (circle area = applicants)</div><canvas id="cvSimpson" class="h330"></canvas></div>
+  <div class="figure"><div class="fig-title">χ² of gender × admission, overall and within each department</div><div class="tablewrap"><table class="ledger" id="strataTable"></table></div></div>
+  <div class="answer">
+    <h3>What happened: Simpson's paradox</h3>
+    <p>Within departments, women are admitted at similar rates, and in department A at a clearly <em>higher</em> rate
+    (the only significant stratum). The aggregate dependence comes from a <b>confounder</b>: women applied mostly to
+    departments C–F, which admit few candidates of either gender, while men applied mostly to A and B, which admit
+    most of them. Gender is associated with department, and department with admission. The Mantel–Haenszel test,
+    which pools the six within-department tables, finds no evidence of a gender effect once department is held fixed
+    (<span id="cmhTxt"></span>).</p>
+    <p>Lessons that hold for any χ² verdict, including the security ones of this page:</p>
+    <ul class="impl">
+      <li><b>Association is symmetric, causation is not.</b> χ² is the same if X and Y are swapped, so it can never
+      say which one drives the other. In NSL-KDD the attack type determines the protocol (a smurf flood is ICMP by
+      construction), not the other way round.</li>
+      <li><b>Hidden variables.</b> A dependence can be produced or reversed by a third variable, as here. Conditioning
+      on it (stratifying) is the observational remedy.</li>
+      <li><b>Causal claims need design.</b> Randomized experiments, or explicit causal models with their assumptions,
+      are what turn "related" into "causes". The broken generator of the RNG dataset is the rare case where we
+      <em>know</em> the cause: each output is computed from the previous one.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 07 CONCLUSIONS ============ -->
+<section id="concl" class="sec">
+  <div class="sec-head"><span class="num">07</span><h2>Conclusions</h2></div>
+  <div class="figure"><div class="tablewrap"><table class="ledger" id="summaryTable"></table></div>
+  <p class="cap">Every row is recomputed from the raw records when the page loads.</p></div>
+  <div class="answer">
+    <p><b>Independent or dependent?</b> The two network variables of NSL-KDD are strongly dependent: the protocol of a
+    connection says a lot about whether, and how, it is an attack (V ≈ 0.23 for protocol × category, larger for the
+    connection flag). The two generators show the use of the test in cryptography: the outputs of a
+    cryptographically secure generator pass (in about 95% of page loads, since they are drawn fresh each time and a
+    5% test rejects a true independence 5% of the time), consecutive low bits of a power-of-two LCG are perfectly dependent
+    (V = 1), which is why χ² tests are part of randomness test suites. Berkeley shows that a significant χ² is a
+    statement about the table, not about the mechanism behind it.</p>
+    <p><b>Reading the numbers.</b> χ² and p answer "could this table come from independent variables?"; with tens of
+    thousands of units even tiny associations become significant, so the size of the association (V, residuals,
+    conditional profiles) has to be read alongside the p-value.</p>
+  </div>
+</section>
+
+<!-- ============ 08 IMPLEMENTATION ============ -->
+<section id="impl" class="sec">
+  <div class="sec-head"><span class="num">08</span><h2>Implementation notes</h2></div>
+  <ul class="impl">
+    <li><b>Tables from raw data.</b> Records are scanned once; levels are discovered in order of frequency and
+      counted in a <code>Map</code>. Berkeley's published counts are expanded into 4,526 individual records first, so it
+      goes through the same code path.</li>
+    <li><b>NSL-KDD.</b> Test set <code>KDDTest+</code> (Tavallaee et al., 2009), 22,544 connections; the 39 attack labels
+      are grouped into the usual four categories (DoS, Probe, R2L, U2R), with the grouping listed in the source code.</li>
+    <li><b>p-value.</b> Regularized incomplete gamma by series (x &lt; a+1) or Lentz's continued fraction, in log space so
+      that p-values far below 10<sup>−300</sup> are still reported as a power of ten. Checked against SciPy and mpmath.</li>
+    <li><b>Permutation test.</b> 999 Fisher–Yates shuffles of Y with a seeded PRNG; p = (1 + #{χ²* ≥ χ²}) / 1000.</li>
+    <li><b>Mantel–Haenszel.</b> 2×2×K test with continuity correction and the MH common odds ratio, as in R's
+      <code>mantelhaen.test</code>.</li>
+    <li><b>Generators.</b> <code>crypto.getRandomValues</code> versus the LCG \(x_{k+1}=(1103515245\,x_k+12345)\bmod 2^{31}\);
+      X and Y are the two low bits of consecutive outputs.</li>
+  </ul>
+</section>
+
+<footer class="foot mono">HomeWork 6 · HW6 · Statistics, MSc Cybersecurity — Sapienza Università di Roma</footer>
+</main>
+</div>
+<script src="kdd.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
