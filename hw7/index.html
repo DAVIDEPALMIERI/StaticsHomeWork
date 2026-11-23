@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HomeWork 7</title>
+<meta name="description" content="Homework 7 – Statistics (MSc Cybersecurity, Sapienza): modes of convergence, the √n law, conditional probability and Bayesian inference.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]})"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+
+<aside class="index">
+  <a class="back" href="../">← All homeworks</a>
+  <div class="brand">
+    <span class="stamp">Limits &amp; Beliefs</span>
+    <div><small>convergence · √n · Bayes</small></div>
+  </div>
+  <nav id="toc">
+    <a href="#modes"><span>01</span>Four ways to converge</a>
+    <a href="#micro"><span>02</span>Convergence microscope</a>
+    <a href="#sqrtn"><span>03</span>Why √n, and when it breaks</a>
+    <a href="#cond"><span>04</span>Conditional probability &amp; Bayes</a>
+    <a href="#meter"><span>05</span>Evidence meter (decibans)</a>
+    <a href="#caesar"><span>06</span>Bayes breaks Caesar</a>
+    <a href="#rate"><span>07</span>Attack rate: priors at work</a>
+    <a href="#limits"><span>08</span>Advantages &amp; limitations</a>
+    <a href="#impl"><span>09</span>Implementation notes</a>
+  </nav>
+  <div class="meta">
+    Statistics · MSc Cybersecurity<br>
+    Sapienza Università di Roma<br>
+    <span class="who">Student: <b>Davide Palmieri 2058889</b></span>
+  </div>
+</aside>
+
+<main>
+<header class="hero">
+  <p class="kicker mono">CASE FILE · HOMEWORK 7 · A.Y. 2026/27</p>
+  <h1>Limits and Beliefs</h1>
+  <p class="sub">Part I: what it means for random quantities to "converge", why the four definitions are not the same,
+  and why \(\sqrt n\) keeps appearing. Part II: how Bayes' theorem turns a likelihood into a posterior, shown on an
+  alarm system, on a Caesar cipher and on the rate of attacks against a server.</p>
+  <dl class="casefile mono">
+    <div><dt>Part I</dt><dd>a.s., probability, L², distribution · LLN, CLT · √n and independence</dd></div>
+    <div><dt>Part II</dt><dd>prior × likelihood → posterior · odds in decibans · grid posteriors</dd></div>
+    <div><dt>Simulations</dt><dd>1,000 paths per sequence, seeded PRNG, all in the browser</dd></div>
+    <div><dt>Stack</dt><dd>vanilla JS + Canvas 2D + SVG</dd></div>
+  </dl>
+</header>
+
+<p class="part">Part I · Modes of convergence</p>
+
+<!-- ============ 01 MODES ============ -->
+<section id="modes" class="sec">
+  <div class="sec-head"><span class="num">01</span><h2>Four ways to converge</h2></div>
+  <p class="lede">For a deterministic sequence "\(x_n\to x\)" has one meaning. A random sequence \(X_n(\omega)\) is a
+  whole family of trajectories, one per outcome \(\omega\in\Omega\), so we can ask different questions about it: does
+  <em>every single trajectory</em> settle? does the <em>probability</em> of being far go to zero? does the <em>average
+  squared error</em> vanish? or does only the <em>shape</em> of the distribution approach a limit?</p>
+  <div class="tablewrap"><table class="ledger mv">
+    <thead><tr><th>mode</th><th>definition</th><th>what it looks at</th><th>where it is used</th></tr></thead>
+    <tbody>
+      <tr><td><b>almost sure</b> \(X_n\xrightarrow{a.s.}X\)</td><td>\(P\big(\{\omega:\lim_n X_n(\omega)=X(\omega)\}\big)=1\)</td>
+        <td>each trajectory, one at a time: all of them converge except a set of probability 0</td><td>strong LLN; Glivenko–Cantelli (the empirical CDF converges uniformly)</td></tr>
+      <tr><td><b>in probability</b> \(X_n\xrightarrow{P}X\)</td><td>\(\forall\varepsilon>0:\ P(|X_n-X|>\varepsilon)\to0\)</td>
+        <td>the mass at a fixed time n: less and less of it is far from X</td><td>weak LLN; consistency of estimators</td></tr>
+      <tr><td><b>mean square</b> \(X_n\xrightarrow{L^2}X\)</td><td>\(E\big[(X_n-X)^2\big]\to0\)</td>
+        <td>the average squared distance, i.e. variance + bias² of an estimator</td><td>LLN by Chebyshev (\(\mathrm{Var}(\bar X_n)=\sigma^2/n\)); MSE of estimators</td></tr>
+      <tr><td><b>in distribution</b> \(X_n\xrightarrow{d}X\)</td><td>\(F_{X_n}(x)\to F_X(x)\) at every continuity point of \(F_X\)</td>
+        <td>only the law, not the values: \(X_n\) and \(X\) need not even live on the same \(\Omega\)</td><td>CLT; asymptotic tests and confidence intervals; Slutsky, delta method</td></tr>
+    </tbody>
+  </table></div>
+  <div class="two">
+    <div class="figure">
+      <div class="fig-title">Implications</div>
+      <svg class="diag" viewBox="0 0 440 210" role="img" aria-label="a.s. and L2 imply in probability, which implies in distribution">
+        <g font-family="IBM Plex Mono, monospace" font-size="13" text-anchor="middle">
+          <rect x="20" y="20" width="120" height="40" fill="#fbf8f1" stroke="#16202a" stroke-width="1.5"/><text x="80" y="45">almost sure</text>
+          <rect x="20" y="140" width="120" height="40" fill="#fbf8f1" stroke="#16202a" stroke-width="1.5"/><text x="80" y="165">mean square</text>
+          <rect x="185" y="80" width="120" height="40" fill="#fbf8f1" stroke="#c0392b" stroke-width="2"/><text x="245" y="105">in probability</text>
+          <rect x="330" y="80" width="100" height="40" fill="#fbf8f1" stroke="#16202a" stroke-width="1.5"/><text x="380" y="98">in</text><text x="380" y="113">distribution</text>
+        </g>
+        <g stroke="#16202a" stroke-width="2" fill="none" marker-end="url(#ah)"><path d="M140 45 L185 92"/><path d="M140 160 L185 110"/><path d="M305 100 L328 100"/></g>
+        <path d="M380 125 C 380 190, 245 195, 245 124" stroke="#2e7d57" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#ahg)"/>
+        <text x="315" y="198" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#2e7d57" text-anchor="middle">only if the limit is a constant</text>
+        <text x="80" y="102" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#5b6670" text-anchor="middle">no implication either way</text>
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#16202a"/></marker>
+          <marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#2e7d57"/></marker></defs>
+      </svg>
+      <p class="cap">Every arrow that is missing has a counterexample, and section 02 simulates one for each.</p>
+    </div>
+    <div class="box">
+      <h3>Roles in the two great theorems</h3>
+      <p><b>LLN.</b> For i.i.d. \(X_i\) with mean \(\mu\): the weak law says \(\bar X_n\xrightarrow{P}\mu\), the strong law
+      (Kolmogorov) says \(\bar X_n\xrightarrow{a.s.}\mu\). With finite variance the proof seen in the lectures goes through
+      \(L^2\): \(E(\bar X_n-\mu)^2=\sigma^2/n\to0\), and Chebyshev turns it into convergence in probability. The strong
+      law is the statement a single long experiment relies on: <em>your</em> trajectory converges, not just most of
+      them at each fixed time.</p>
+      <p><b>CLT.</b> \(Z_n=\sqrt n(\bar X_n-\mu)/\sigma\xrightarrow{d}\mathcal N(0,1)\). It is <em>only</em> in distribution:
+      \(Z_n\) keeps fluctuating forever (it does not converge in probability to anything), but its histogram settles on
+      the bell. This is enough for inference, because tests and intervals only use probabilities, i.e. the law.</p>
+      <p><b>Other results.</b> Consistency of an estimator is convergence in probability to the parameter; Slutsky's theorem
+      lets us replace \(\sigma\) by \(s\) (which converges in probability) inside a quantity converging in distribution;
+      the posterior distribution itself concentrates on the true parameter as data grow (section 07).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 MICROSCOPE ============ -->
+<section id="micro" class="sec">
+  <div class="sec-head"><span class="num">02</span><h2>Convergence microscope</h2></div>
+  <p class="lede">One sequence, four lenses. Pick a sequence: 1,000 independent trajectories are simulated up to
+  n = 4,096 and each panel tests one mode. For a.s. convergence we use a tail test: the probability that a trajectory
+  is still more than ε away <em>somewhere</em> in the window \((n/2,n]\). It must go to 0 if trajectories settle.</p>
+  <div class="toolbar">
+    <label>sequence <select id="seqSel" class="select"></select></label>
+    <label>ε <output id="epsOut" class="mono">0.10</output><input type="range" id="eps" min="0.02" max="0.5" step="0.01" value="0.1"></label>
+  </div>
+  <p class="note" id="seqNote"></p>
+  <dl class="seqinfo" id="seqInfo"></dl>
+  <div class="quad">
+    <div class="figure"><div class="fig-title">① 25 trajectories (log n axis)</div><canvas id="cvTraj" class="h260"></canvas></div>
+    <div class="figure"><div class="fig-title">② in probability vs almost sure</div><canvas id="cvProb" class="h260"></canvas></div>
+    <div class="figure"><div class="fig-title">③ mean square error E(Xₙ − X)²</div><canvas id="cvL2" class="h260"></canvas></div>
+    <div class="figure"><div class="fig-title">④ distribution: empirical CDF at three times</div><canvas id="cvDist" class="h260"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ 03 SQRT N ============ -->
+<section id="sqrtn" class="sec">
+  <div class="sec-head"><span class="num">03</span><h2>Why √n, and when it breaks</h2></div>
+  <div class="two">
+    <div class="box">
+      <h3>The derivation in three lines</h3>
+      <p>Two properties of the variance, both from its quadratic definition:</p>
+      $$\mathrm{Var}(aX)=a^2\,\mathrm{Var}(X),\qquad \mathrm{Var}\Big(\sum_{i=1}^n X_i\Big)=\sum_i\mathrm{Var}(X_i)+2\sum_{i&lt;j}\mathrm{Cov}(X_i,X_j).$$
+      <p>If the \(X_i\) are independent (or just uncorrelated) the covariances vanish, so \(\mathrm{Var}(S_n)=n\sigma^2\).
+      To keep the spread of \(S_n/c_n\) constant we need \(n\sigma^2/c_n^2=\sigma^2\), i.e. \(c_n=\sqrt n\).
+      Dividing by \(n\) is too much (variance \(\sigma^2/n\to0\): LLN), dividing by 1 is too little (\(n\sigma^2\to\infty\)),
+      \(\sqrt n\) is the balance point where the CLT finds a non-degenerate limit.</p>
+      <p><b>In inference</b> the same fact gives the standard error \(\sigma/\sqrt n\): to halve the width of a confidence
+      interval you need four times the data.</p>
+    </div>
+    <div class="box">
+      <h3>The hidden assumption: no correlation</h3>
+      <p>The √n law is a consequence of the covariances being zero. Real security data are rarely like that: traffic
+      comes in bursts, a scanner sends many similar requests, one compromised host generates correlated alerts.
+      For a stationary AR(1) process with lag-one correlation \(\rho\) (unit variance),</p>
+      $$\mathrm{Var}(S_n)\approx n\,\frac{1+\rho}{1-\rho},$$
+      <p>still linear in \(n\), but with a larger constant: the textbook interval \(\bar x\pm1.96\,s/\sqrt n\) becomes too
+      narrow and covers the truth far less than 95% of the time. At the extreme, if all \(X_i\) are the same variable,
+      \(\mathrm{Var}(S_n)=n^2\sigma^2\): averaging gives <em>no</em> information at all.</p>
+    </div>
+  </div>
+  <div class="toolbar">
+    <label>dependence <select id="depSel" class="select">
+      <option value="iid">independent</option><option value="ar" selected>AR(1) correlated</option><option value="same">identical copies (X₁ = X₂ = …)</option></select></label>
+    <label id="rhoLbl">ρ <output id="rhoOut" class="mono">0.60</output><input type="range" id="rho" min="-0.8" max="0.95" step="0.05" value="0.6"></label>
+  </div>
+  <div class="two">
+    <div class="figure"><div class="fig-title">Var(Sₙ) on log-log axes</div><canvas id="cvVarS" class="h300"></canvas><p class="cap mono" id="varNote"></p></div>
+    <div class="figure"><div class="fig-title">Coverage of the naive 95% interval x̄ ± 1.96 s/√n</div><canvas id="cvCov" class="h300"></canvas><p class="cap mono" id="covNote"></p></div>
+  </div>
+</section>
+
+<p class="part">Part II · Conditional probability and Bayesian inference</p>
+
+<!-- ============ 04 CONDITIONAL ============ -->
+<section id="cond" class="sec">
+  <div class="sec-head"><span class="num">04</span><h2>Conditional probability and Bayes' theorem</h2></div>
+  <div class="duo">
+    <div class="method" style="--c:var(--blue)">
+      <h3>In statistics: conditional frequencies</h3>
+      <p>In a contingency table (HW6) a conditional distribution is one column read on its own:
+      \(f(x_i\mid y_j)=n_{ij}/n_{\cdot j}\). We restrict the population to the units with \(Y=y_j\) and recompute the
+      proportions inside it. Reading the same cell by row gives the other conditional, \(n_{ij}/n_{i\cdot}\): the two are
+      different numbers.</p>
+    </div>
+    <div class="method" style="--c:var(--red)">
+      <h3>In probability: a definition</h3>
+      $$P(A\mid B)=\frac{P(A\cap B)}{P(B)},\qquad P(B)>0 .$$
+      <p>It restricts \(\Omega\) to \(B\) and renormalizes so that \(B\) has probability 1. Since \(A\cap B=B\cap A\),</p>
+      $$P(A\mid B)P(B)=P(B\mid A)P(A)\ \Longrightarrow\ P(A\mid B)=\frac{P(B\mid A)\,P(A)}{P(B)}.$$
+    </div>
+  </div>
+  <div class="box">
+    <h3>Bayes as an inference engine</h3>
+    <p>Algebraically trivial, conceptually central. Replace \(A\) by an unknown <b>parameter or cause</b> \(\theta\) and
+    \(B\) by the observed <b>data</b> \(x\):</p>
+    $$\underbrace{p(\theta\mid x)}_{\text{posterior}}=\frac{\overbrace{p(x\mid\theta)}^{\text{likelihood } L(\theta)}\ \overbrace{p(\theta)}^{\text{prior}}}{\underbrace{p(x)}_{\text{evidence}}},\qquad p(x)=\sum_\theta p(x\mid\theta)\,p(\theta),$$
+    <p>or, comparing two hypotheses, in odds form:</p>
+    $$\underbrace{\frac{p(\theta_1\mid x)}{p(\theta_2\mid x)}}_{\text{posterior odds}}=\underbrace{\frac{p(x\mid\theta_1)}{p(x\mid\theta_2)}}_{\text{Bayes factor}}\cdot\underbrace{\frac{p(\theta_1)}{p(\theta_2)}}_{\text{prior odds}}.$$
+    <ul class="impl">
+      <li><b>Prior</b> \(p(\theta)\): what we believe before the data (base rates, last month's logs, expert knowledge, or
+      deliberate ignorance).</li>
+      <li><b>Likelihood</b> \(L(\theta)=p(x\mid\theta)\): how probable the observed data are <em>if</em> \(\theta\) were true.
+      It is a function of \(\theta\) but <em>not</em> a probability distribution over \(\theta\) (it need not sum to 1).</li>
+      <li><b>Posterior</b> \(p(\theta\mid x)\): the updated belief. Tomorrow's data can update it again, with today's posterior
+      as the new prior: this is why Bayesian learning is naturally an online algorithm.</li>
+    </ul>
+    <p class="note">The lecture's warning: likelihood ≠ posterior. A cough is almost certain if you have a terminal illness
+    and only 50% likely with a flu, so the illness has the higher likelihood; but it is so rare that the flu keeps by far
+    the higher posterior. With a uniform prior the two coincide up to normalization (section 06).</p>
+  </div>
+</section>
+
+<!-- ============ 05 METER ============ -->
+<section id="meter" class="sec">
+  <div class="sec-head"><span class="num">05</span><h2>Evidence meter: one alarm is not proof</h2></div>
+  <p class="lede">A detector flags malicious traffic. In odds form, each alarm multiplies the odds of "attack" by the
+  likelihood ratio \(LR=\frac{P(\text{alarm}\mid\text{attack})}{P(\text{alarm}\mid\text{benign})}\). On a log scale the
+  multiplication becomes addition: Alan Turing and I. J. Good measured evidence in <b>decibans</b>,
+  \(10\log_{10}(\text{odds})\), when breaking Enigma at Bletchley Park. Several <em>independent</em> sensors (in the sense
+  of HW6, conditionally on the true state) simply add their decibans.</p>
+  <div class="toolbar">
+    <label>base rate P(attack) <output id="piOut" class="mono"></output><input type="range" id="pi" min="-6" max="-0.3" step="0.1" value="-3"></label>
+    <label>detection rate <output id="senOut" class="mono"></output><input type="range" id="sen" min="0.5" max="0.999" step="0.001" value="0.99"></label>
+    <label>false-positive rate <output id="fprOut" class="mono"></output><input type="range" id="fpr" min="-4" max="-0.7" step="0.1" value="-2"></label>
+  </div>
+  <div class="two">
+    <div class="figure"><div class="fig-title">Natural frequencies: 1,000,000 connections, one alarm each</div><div class="tablewrap" id="nfTable"></div><p class="cap" id="nfCap"></p></div>
+    <div class="figure"><div class="fig-title">P(attack) after k independent alarms, and the evidence in decibans</div><canvas id="cvMeter" class="h300"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ 06 CAESAR ============ -->
+<section id="caesar" class="sec">
+  <div class="sec-head"><span class="num">06</span><h2>Bayes breaks Caesar</h2></div>
+  <p class="lede">Back to the first homeworks: a message encrypted with an unknown shift \(\theta\in\{0,\dots,25\}\).
+  If the plaintext letters follow English frequencies \(q_\ell\), the likelihood of a ciphertext \(c_1\dots c_k\) is
+  \(L(\theta)=\prod_i q_{(c_i-\theta)\bmod 26}\), and the posterior over the 26 keys is updated one letter at a time.
+  Reveal more letters and watch the posterior collapse on one key.</p>
+  <div class="toolbar">
+    <label>plaintext <input class="txt" id="ptIn" value="statistics turns uncertainty into numbers that we can reason about"></label>
+    <label>true shift <input type="number" id="shiftIn" class="select" min="0" max="25" value="11" style="width:70px"></label>
+    <label>prior <select id="priorSel" class="select">
+      <option value="flat">uniform: no idea</option><option value="habit">operator habit: 50% on shift 3</option><option value="dog">dogmatic: true key ruled out</option></select></label>
+    <label>letters seen <output id="kOut" class="mono"></output><input type="range" id="kSl" min="0" max="40" step="1" value="6"></label>
+  </div>
+  <div class="cipher" id="cipherOut"></div>
+  <div class="figure"><canvas id="cvCaesar" class="h300"></canvas><p class="cap mono" id="caesarNote"></p></div>
+</section>
+
+<!-- ============ 07 RATE ============ -->
+<section id="rate" class="sec">
+  <div class="sec-head"><span class="num">07</span><h2>Attack rate: how much does the prior matter?</h2></div>
+  <p class="lede">A server receives a Poisson number of intrusion attempts per hour with unknown rate \(\lambda\). After
+  \(n\) hours with counts \(k_1,\dots,k_n\) the likelihood is \(L(\lambda)\propto\lambda^{\sum k_i}e^{-n\lambda}\). The
+  posterior is computed <b>numerically on a grid</b> of 1,200 values of λ, so any prior works, even non-standard
+  ones. Four analysts start from four different priors and see the same data.</p>
+  <div class="toolbar">
+    <label>true λ <output id="lamOut" class="mono">7</output><input type="range" id="lam" min="1" max="20" step="0.5" value="7"></label>
+    <label>hours observed <output id="hOut" class="mono">6</output><input type="range" id="hSl" min="0" max="168" step="1" value="6"></label>
+    <label>show prior <select id="showSel" class="select"></select></label>
+  </div>
+  <div class="two">
+    <div class="figure"><div class="fig-title">Prior, likelihood and posterior for the selected analyst</div><canvas id="cvRate" class="h300"></canvas></div>
+    <div class="figure"><div class="fig-title">Posterior mean of the four analysts as hours accumulate</div><canvas id="cvRateConv" class="h300"></canvas></div>
+  </div>
+  <div class="figure"><div class="tablewrap"><table class="ledger" id="rateTable"></table></div><p class="cap" id="rateCap"></p></div>
+</section>
+
+<!-- ============ 08 LIMITS ============ -->
+<section id="limits" class="sec">
+  <div class="sec-head"><span class="num">08</span><h2>Advantages, limitations and influence on conclusions</h2></div>
+  <div class="two">
+    <div class="answer">
+      <h3>Advantages</h3>
+      <ul class="impl">
+        <li><b>Uses what we know.</b> Base rates are knowledge: ignoring them is the base-rate fallacy of section 05,
+        where a 99%-accurate detector is wrong most of the time it fires.</li>
+        <li><b>Direct answers.</b> The posterior gives \(P(\theta\in[a,b]\mid x)\), the statement people usually want and
+        wrongly read into a frequentist confidence interval.</li>
+        <li><b>Sequential by nature.</b> Yesterday's posterior is today's prior: alerts, letters or hours can be absorbed one
+        at a time without storing the past.</li>
+        <li><b>Stable with little data.</b> A reasonable prior shrinks wild estimates from a handful of observations
+        (in section 07, after one hour with only 2 attempts, the flat analyst estimates λ ≈ 3 while the informative one already says 6.3, against a true value of 7).</li>
+      </ul>
+    </div>
+    <div class="answer">
+      <h3>Limitations</h3>
+      <ul class="impl">
+        <li><b>Subjectivity.</b> With little data the conclusion depends on the prior: two analysts can disagree honestly.
+        Reporting the posterior under several priors (sensitivity analysis) is the remedy.</li>
+        <li><b>Wrong priors cost data.</b> A confident wrong prior needs many observations to be overturned (the
+        "confidently wrong" analyst), and a prior that gives probability 0 to the truth can <em>never</em> recover:
+        Cromwell's rule, shown by the dogmatic prior in section 06.</li>
+        <li><b>Model dependence.</b> The likelihood assumes a model (English letter frequencies, Poisson counts,
+        independent sensors). If sensors are correlated, multiplying their likelihood ratios overstates the evidence.</li>
+        <li><b>Computation.</b> \(p(x)\) is an integral over all parameters; with many parameters it needs MCMC or
+        variational methods instead of a simple grid.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="answer">
+    <h3>The two parts meet</h3>
+    <p>As data accumulate, every posterior that gives positive weight to the truth concentrates on it, with a width that
+    shrinks like \(1/\sqrt n\) (Bernstein–von Mises: asymptotically it is a normal centred at the MLE with the frequentist
+    standard error). The posterior consistency of section 07 is a convergence in probability, and its \(\sqrt n\) is the
+    same variance additivity of section 03. This is why Bayesian and frequentist answers agree with large samples and can
+    differ sharply with small ones, which is exactly where the prior matters.</p>
+  </div>
+</section>
+
+<!-- ============ 09 IMPLEMENTATION ============ -->
+<section id="impl" class="sec">
+  <div class="sec-head"><span class="num">09</span><h2>Implementation notes</h2></div>
+  <ul class="impl">
+    <li><b>Microscope.</b> 1,000 paths × 4,096 steps per sequence; statistics recorded at n = 2, 4, …, 4096. The a.s. test is
+      the fraction of paths with \(\sup_{n/2&lt;k\le n}|X_k-X|>\varepsilon\). For sequences without a fixed limit, X is replaced by
+      \(X_{n/2}\): a sequence converging in probability must be Cauchy in probability.</li>
+    <li><b>Dependence.</b> AR(1) \(X_t=\rho X_{t-1}+\sqrt{1-\rho^2}\,\varepsilon_t\) started from its stationary law, 1,000 paths;
+      coverage counted at n = 1,024.</li>
+    <li><b>Caesar.</b> English letter frequencies of Lewand (Cryptological Mathematics), as listed on Wikipedia's "Letter frequency"; posterior
+      computed in log space and normalized.</li>
+    <li><b>Attack rate.</b> Grid of 1,200 points on (0, 30]; posterior ∝ prior × λ<sup>Σk</sup>e<sup>−nλ</sup> in log space;
+      95% credible interval from the cumulative posterior. Hourly counts simulated with a seeded Poisson generator.</li>
+    <li><b>No libraries.</b> Plots on Canvas 2D, diagram in SVG; only KaTeX is loaded for formulas.</li>
+  </ul>
+</section>
+
+<footer class="foot mono">HomeWork 7 · HW7 · Statistics, MSc Cybersecurity — Sapienza Università di Roma</footer>
+</main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
